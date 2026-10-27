@@ -1,0 +1,346 @@
+/**
+ * Data-access layer. UI and scene only call these interfaces.
+ * MockGameService works fully offline (localStorage). To go live, implement the
+ * same interfaces against a real backend (e.g. Supabase) and validate EVERY
+ * value server-side — client state must never be trusted for money.
+ */
+import Decimal from "decimal.js";
+import { getConfig } from "./config";
+import { D, cropById, fishingStatus, growMs, itemPrice, levelNeed, MIN, production } from "./logic";
+import { getState, setState, resetState, type GameState, type Lang, type Tx } from "./store";
+
+export type Vars = Record<string, string | number>;
+export type Result = { ok: boolean; key: string; vars?: Vars; fx?: string };
+const ok = (key: string, vars?: Vars, fx?: string): Result => ({ ok: true, key, vars, fx });
+const fail = (key: string, vars?: Vars): Result => ({ ok: false, key, vars });
+
+export interface FarmService {
+  buySeed(cropId: string, n: number): Result;
+  plant(plot: number, cropId: string): Result;
+  harvest(plot: number): Result;
+  unlockPlot(plot: number): Result;
+}
+export interface FishingService {
+  cast(): Result;
+  collect(): Result;
+  upgradeRod(): Result;
+}
+export interface ProductionService {
+  collect(kind: "hive" | "coop"): Result;
+  upgrade(kind: "hive" | "coop"): Result;
+}
+export interface MarketService {
+  sell(itemId: string, qty: string): Result;
+}
+export interface WalletService {
+  transferSalesToPlay(amount: string): Result;
+  requestWithdrawal(address: string, amount: string): Result;
+}
+export interface AccountService {
+  login(email: string, password: string): Result;
+  register(name: string, email: string, password: string): Result;
+  recover(email: string): Result;
+  logout(): Result;
+  updateProfile(p: { name: string; avatar: number }): Result;
+}
+export interface SettingsService {
+  setLang(l: Lang): void;
+  setSpeed(n: number): void;
+  resetDemo(): void;
+}
+
+// ---------- helpers ----------
+let txSeq = 0;
+function addTx(s: GameState, t: Omit<Tx, "id" | "at" | "status"> & { status?: Tx["status"] }): GameState {
+  const tx: Tx = { status: "confirmed", ...t, id: `${Date.now()}-${++txSeq}`, at: Date.now() };
+  return { ...s, txs: [tx, ...s.txs].slice(0, 200) };
+}
+function addXp(s: GameState, n: number): GameState {
+  let xp = s.xp + n;
+  let level = s.level;
+  while (xp >= levelNeed(level)) {
+    xp -= levelNeed(level);
+    level++;
+  }
+  return { ...s, xp, level };
+}
+function addInv(s: GameState, id: string, q: Decimal.Value): GameState {
+  return { ...s, inventory: { ...s.inventory, [id]: D(s.inventory[id] ?? 0).plus(q).toString() } };
+}
+const locks = new Set<string>();
+function guarded(key: string, fn: () => Result): Result {
+  if (locks.has(key)) return fail("err.busy");
+  locks.add(key);
+  try {
+    return fn();
+  } finally {
+    locks.delete(key);
+  }
+}
+function pay(cost: Decimal.Value): Result | null {
+  return D(getState().playBalance).lt(cost) ? fail("err.funds", { cost: D(cost).toString() }) : null;
+}
+
+// ---------- mock implementation ----------
+class MockGameService
+  implements FarmService, FishingService, MarketService, WalletService, AccountService, SettingsService
+{
+  buySeed(cropId: string, n: number) {
+    const c = cropById(cropId);
+    if (!c || n < 1) return fail("err.generic");
+    const cost = D(c.seedPrice).mul(n);
+    const e = pay(cost);
+    if (e) return e;
+    setState((s) =>
+      addTx(
+        { ...s, playBalance: D(s.playBalance).minus(cost).toString(), seeds: { ...s.seeds, [cropId]: (s.seeds[cropId] ?? 0) + n } },
+        { kind: "seed", labelKey: "tx.seed", vars: { n, item: cropId }, amount: cost.neg().toString(), currency: "play" },
+      ),
+    );
+    return ok("ok.seed", { n, item: cropId });
+  }
+  plant(plot: number, cropId: string) {
+    return guarded(`plot${plot}`, () => {
+      const s = getState();
+      const c = cropById(cropId);
+      if (!c || !s.unlocked[plot]) return fail("err.locked");
+      if (s.plots[plot].cropId) return fail("err.occupied");
+      if ((s.seeds[cropId] ?? 0) < 1) return fail("err.noSeed");
+      const now = Date.now();
+      setState((st) => ({
+        ...st,
+        seeds: { ...st.seeds, [cropId]: st.seeds[cropId] - 1 },
+        plots: st.plots.map((p, i) => (i === plot ? { cropId, plantedAt: now, readyAt: now + growMs(c.growHours, st.speed) } : p)),
+      }));
+      return ok("ok.plant", { item: cropId }, "🌱");
+    });
+  }
+  harvest(plot: number) {
+    return guarded(`plot${plot}`, () => {
+      const s = getState();
+      const p = s.plots[plot];
+      const c = p?.cropId ? cropById(p.cropId) : undefined;
+      if (!p || !c) return fail("err.nothingToHarvest");
+      if (Date.now() < p.readyAt) return fail("err.notReady");
+      setState((st) =>
+        addXp(
+          addInv({ ...st, plots: st.plots.map((x, i) => (i === plot ? { cropId: null, plantedAt: 0, readyAt: 0 } : x)) }, c.id, c.harvestQty),
+          c.xp,
+        ),
+      );
+      return ok("ok.harvest", { qty: c.harvestQty, item: c.id }, `+${D(c.harvestQty).toFixed(2)}`);
+    });
+  }
+  unlockPlot(plot: number) {
+    const s = getState();
+    const req = getConfig().plots[plot];
+    if (!req || s.unlocked[plot]) return fail("err.generic");
+    if (plot > 0 && !s.unlocked[plot - 1]) return fail("err.prevPlot");
+    if (s.level < req.level) return fail("err.level", { level: req.level });
+    const e = pay(req.cost);
+    if (e) return e;
+    setState((st) =>
+      addTx(
+        { ...st, playBalance: D(st.playBalance).minus(req.cost).toString(), unlocked: st.unlocked.map((u, i) => u || i === plot) },
+        { kind: "unlock", labelKey: "tx.unlock", vars: { n: plot + 1 }, amount: D(req.cost).neg().toString(), currency: "play" },
+      ),
+    );
+    return ok("ok.unlock", { n: plot + 1 }, "🔓");
+  }
+  cast() {
+    const s = getState();
+    if (s.fishing && fishingStatus(s, Date.now()) !== "expired") return fail("err.alreadyFishing");
+    const rod = getConfig().fishing.rods[s.rodLevel];
+    const now = Date.now();
+    const wait = (rod.castMinutes * MIN) / Math.max(1, s.speed) * 60 / 60;
+    const expire = (getConfig().fishing.expireMinutes * MIN) / Math.max(1, s.speed);
+    setState((st) => ({ ...st, fishing: { castAt: now, readyAt: now + wait, expiresAt: now + wait + expire } }));
+    return ok("ok.cast", undefined, "〰");
+  }
+  collect() {
+    return guarded("fish", () => {
+      const s = getState();
+      const st = fishingStatus(s, Date.now());
+      if (st === "idle") return fail("err.notFishing");
+      if (st === "waiting") return fail("err.notReady");
+      if (st === "expired") {
+        setState((x) => ({ ...x, fishing: null }));
+        return fail("err.fishEscaped");
+      }
+      const cfg = getConfig().fishing;
+      const rod = cfg.rods[s.rodLevel];
+      if (Math.random() < cfg.missChance) {
+        setState((x) => ({ ...x, fishing: null }));
+        return fail("err.miss");
+      }
+      // Rarer fish get the rod bonus added to their weight.
+      const weights = cfg.fish.map((f) => f.chance + (f.chance < 0.3 ? rod.rareBonus : 0));
+      const total = weights.reduce((a, b) => a + b, 0);
+      let r = Math.random() * total;
+      let fish = cfg.fish[0];
+      for (let i = 0; i < cfg.fish.length; i++) {
+        r -= weights[i];
+        if (r <= 0) {
+          fish = cfg.fish[i];
+          break;
+        }
+      }
+      setState((x) => addXp(addInv({ ...x, fishing: null }, fish.id, fish.qty), cfg.xp));
+      return ok("ok.fish", { qty: fish.qty, item: fish.id }, `+${fish.qty} 🐟`);
+    });
+  }
+  upgradeRod() {
+    const s = getState();
+    const next = getConfig().fishing.rods[s.rodLevel + 1];
+    if (!next) return fail("err.maxLevel");
+    const e = pay(next.cost);
+    if (e) return e;
+    setState((st) =>
+      addTx(
+        { ...st, rodLevel: st.rodLevel + 1, playBalance: D(st.playBalance).minus(next.cost).toString() },
+        { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: "rod" }, amount: D(next.cost).neg().toString(), currency: "play" },
+      ),
+    );
+    return ok("ok.upgrade");
+  }
+  collectProd(kind: "hive" | "coop") {
+    return guarded(kind, () => {
+      const s = getState();
+      const now = Date.now();
+      const { amount } = production(kind, s, now);
+      const whole = amount.floor();
+      if (whole.lt(1)) return fail("err.notReady");
+      const item = kind === "hive" ? "honey" : "egg";
+      setState((st) =>
+        addXp(addInv({ ...st, [kind]: { ...st[kind], last: now, stored: amount.minus(whole).toString() } }, item, whole), getConfig()[kind].xp),
+      );
+      return ok("ok.collect", { qty: whole.toString(), item }, `+${whole.toString()}`);
+    });
+  }
+  upgradeProd(kind: "hive" | "coop") {
+    const s = getState();
+    const next = getConfig()[kind].levels[s[kind].level + 1];
+    if (!next) return fail("err.maxLevel");
+    const e = pay(next.cost);
+    if (e) return e;
+    const now = Date.now();
+    const { amount } = production(kind, s, now);
+    setState((st) =>
+      addTx(
+        { ...st, playBalance: D(st.playBalance).minus(next.cost).toString(), [kind]: { level: st[kind].level + 1, last: now, stored: amount.toString() } },
+        { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: kind }, amount: D(next.cost).neg().toString(), currency: "play" },
+      ),
+    );
+    return ok("ok.upgrade");
+  }
+  sell(itemId: string, qty: string) {
+    return guarded(`sell-${itemId}`, () => {
+      let q: Decimal;
+      try {
+        q = D(qty).toDecimalPlaces(4, Decimal.ROUND_DOWN);
+      } catch {
+        return fail("err.qty");
+      }
+      if (q.lte(0)) return fail("err.qty");
+      const price = itemPrice(itemId);
+      const have = D(getState().inventory[itemId] ?? 0);
+      if (!price) return fail("err.generic");
+      if (have.lt(q)) return fail("err.inventory");
+      const total = q.mul(price).toDecimalPlaces(4, Decimal.ROUND_DOWN);
+      setState((s) =>
+        addTx(
+          {
+            ...s,
+            inventory: { ...s.inventory, [itemId]: D(s.inventory[itemId] ?? 0).minus(q).toString() },
+            salesBalance: D(s.salesBalance).plus(total).toString(),
+          },
+          { kind: "sale", labelKey: "tx.sale", vars: { qty: q.toString(), item: itemId }, amount: total.toString(), currency: "sales" },
+        ),
+      );
+      return ok("ok.sell", { qty: q.toString(), item: itemId, total: total.toString() });
+    });
+  }
+  transferSalesToPlay(amount: string) {
+    let a: Decimal;
+    try {
+      a = D(amount);
+    } catch {
+      return fail("err.qty");
+    }
+    if (a.lte(0)) return fail("err.qty");
+    if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
+    setState((s) =>
+      addTx(
+        { ...s, salesBalance: D(s.salesBalance).minus(a).toString(), playBalance: D(s.playBalance).plus(a).toString() },
+        { kind: "transfer", labelKey: "tx.transfer", amount: a.toString(), currency: "play" },
+      ),
+    );
+    return ok("ok.transfer");
+  }
+  requestWithdrawal(address: string, amount: string) {
+    const w = getConfig().wallet;
+    if (address.trim().length < 8) return fail("err.address");
+    let a: Decimal;
+    try {
+      a = D(amount);
+    } catch {
+      return fail("err.qty");
+    }
+    if (a.lt(w.minWithdrawal)) return fail("err.minWithdraw", { min: w.minWithdrawal });
+    if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
+    // Demo only: nothing is deducted, nothing is sent.
+    setState((s) =>
+      addTx(s, { kind: "withdraw", labelKey: "tx.withdrawDemo", amount: a.neg().toString(), currency: "sales", status: "pending", demo: true }),
+    );
+    return ok("ok.withdrawDemo");
+  }
+  login(email: string, password: string) {
+    if (!email.includes("@") || password.length < 4) return fail("err.credentials");
+    setState((s) => ({ ...s, profile: { ...s.profile, email, loggedIn: true } }));
+    return ok("ok.login");
+  }
+  register(name: string, email: string, password: string) {
+    if (!name.trim() || !email.includes("@") || password.length < 6) return fail("err.register");
+    setState((s) => ({ ...s, profile: { ...s.profile, name: name.trim(), email, loggedIn: true } }));
+    return ok("ok.register");
+  }
+  recover(email: string) {
+    if (!email.includes("@")) return fail("err.email");
+    return ok("ok.recover");
+  }
+  logout() {
+    setState((s) => ({ ...s, profile: { ...s.profile, loggedIn: false } }));
+    return ok("ok.logout");
+  }
+  updateProfile(p: { name: string; avatar: number }) {
+    if (!p.name.trim()) return fail("err.generic");
+    setState((s) => ({ ...s, profile: { ...s.profile, name: p.name.trim(), avatar: p.avatar } }));
+    return ok("ok.saved");
+  }
+  setLang(l: Lang) {
+    try {
+      localStorage.setItem("growora-lang", l);
+    } catch {
+      /* ignore */
+    }
+    setState((s) => ({ ...s, lang: l }));
+  }
+  setSpeed(n: number) {
+    setState((s) => ({ ...s, speed: n }));
+  }
+  resetDemo() {
+    resetState();
+  }
+}
+
+const mock = new MockGameService();
+export const farmService: FarmService = mock;
+export const fishingService: FishingService = mock;
+export const productionService: ProductionService = {
+  collect: (k) => mock.collectProd(k),
+  upgrade: (k) => mock.upgradeProd(k),
+};
+export const marketService: MarketService = mock;
+export const walletService: WalletService = mock;
+export const accountService: AccountService = mock;
+export const settingsService: SettingsService = mock;
