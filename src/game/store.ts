@@ -20,6 +20,7 @@ export interface Plot {
 }
 export interface Production {
   level: number;
+  active: boolean;
   last: number;
   stored: string;
 }
@@ -57,8 +58,8 @@ export function makeDefault(now: number): GameState {
     inventory: {},
     rodLevel: 0,
     fishing: null,
-    hive: { level: 0, last: now, stored: "0" },
-    coop: { level: 0, last: now, stored: "0" },
+    hive: { level: 0, active: false, last: now, stored: "0" },
+    coop: { level: 0, active: false, last: now, stored: "0" },
     txs: [],
     lang: "en",
     speed: 1,
