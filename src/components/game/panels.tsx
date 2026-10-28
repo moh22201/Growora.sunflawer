@@ -174,6 +174,25 @@ function FishingPanel({ close, act }: { close: () => void; act: Act }) {
           {next ? `${t("common.upgrade")} ${fmtMoney(next.cost)}` : t("common.max")}
         </PixelButton>
       </Row>
+      <div className="space-y-1.5">
+        <p className="font-display text-[10px]">{t("fish.rod")} · {t("common.cost")}</p>
+        {cfg.rods.map((r, i) => (
+          <Row key={i} className={i === s.rodLevel ? "border border-primary/60" : ""}>
+            <Fish className="size-4 text-primary" />
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="font-semibold">{t("fish.rod")} {i + 1}{i === s.rodLevel ? " · ✓" : ""}</p>
+              <p className="text-xs text-muted-foreground">
+                {fmtMoney(r.cost)} · {r.castMinutes}m · +{Math.round(r.rareBonus * 100)}% {t("fish.rareBonus")}
+              </p>
+            </div>
+            {i > s.rodLevel && i === s.rodLevel + 1 && (
+              <PixelButton size="sm" variant="blue" onClick={() => act(fishingService.upgradeRod())}>
+                {t("common.buy")} {fmtMoney(r.cost)}
+              </PixelButton>
+            )}
+          </Row>
+        ))}
+      </div>
       <div className="pixel-inset space-y-2 bg-secondary/30 p-3">
         {st === "idle" && <p>{t("fish.idle")}</p>}
         {st === "waiting" && s.fishing && (
@@ -286,6 +305,7 @@ function SellList({ kind, act }: { kind: "crop" | "fish" | "honey" | "egg"; act:
   const [qtys, setQtys] = useState<Record<string, string>>({});
   return (
     <div className="space-y-1.5">
+      {kind === "fish" && <p className="font-display text-[10px]">{t("market.fish")} · {ids.length}</p>}
       {confirm && <ConfirmSell {...confirm} onDone={() => setConfirm(null)} act={act} />}
       {ids.map((id) => {
         const have = D(s.inventory[id] ?? 0);
