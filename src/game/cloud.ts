@@ -3,6 +3,10 @@ import { supabase } from "@/lib/supabase";
 import { getState, makeDefault, setState, type GameState } from "./store";
 
 let walletRevision = 0;
+
+export function setWalletRevision(revision: number) {
+  if (Number.isFinite(revision) && revision >= 0) walletRevision = revision;
+}
 let walletSaveQueue: Promise<void> = Promise.resolve();
 
 const cropHours: Record<string, number> = {
