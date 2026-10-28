@@ -468,12 +468,6 @@ function InventoryPanel({ close }: { close: () => void }) {
   );
 }
 
-const SAMPLE_TXS: Tx[] = [
-  { id: "s1", kind: "deposit", labelKey: "tx.depositDemo", amount: "25", currency: "play", at: 0, status: "confirmed", demo: true },
-  { id: "s2", kind: "withdraw", labelKey: "tx.withdrawDemo", amount: "-12", currency: "sales", at: 0, status: "pending", demo: true },
-  { id: "s3", kind: "withdraw", labelKey: "tx.withdrawDemo", amount: "-40", currency: "sales", at: 0, status: "rejected", demo: true },
-];
-
 function TxList({ txs }: { txs: Tx[] }) {
   const t = useT();
   if (!txs.length) return <p className="text-muted-foreground">{t("common.empty")}</p>;
