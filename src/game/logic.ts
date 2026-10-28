@@ -13,6 +13,10 @@ export function fmtMoney(v: Decimal.Value) {
   const s = D(v).toDecimalPlaces(4).toFixed(4).replace(/(\.\d\d\d*?)0+$/, "$1");
   return "$" + s;
 }
+export function fmtSalesMoney(v: Decimal.Value) {
+  const s = D(v).toDecimalPlaces(4).toFixed(4).replace(/(\\.\\d\\d\\d*?)0+$/, "$1");
+  return s + " GRW";
+}
 export function fmtQty(v: Decimal.Value) {
   return D(v).toDecimalPlaces(4).toString();
 }
