@@ -236,7 +236,7 @@ class MockGameService
     const { amount } = production(kind, s, now);
     setState((st) =>
       addTx(
-        { ...st, playBalance: D(st.playBalance).minus(next.cost).toString(), [kind]: { level: st[kind].level + 1, active: st[kind].active, last: now, stored: amount.toString() } },
+        { ...st, playBalance: D(st.playBalance).minus(next.cost).toString(), [kind]: { level: st[kind].level + 1, active: true, last: now, stored: amount.toString() } },
         { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: kind }, amount: D(next.cost).neg().toString(), currency: "play" },
       ),
     );
@@ -371,12 +371,6 @@ export const fishingService: FishingService = mock;
 export const productionService: ProductionService = {
   collect: (k) => mock.collectProd(k),
   upgrade: (k) => mock.upgradeProd(k),
-  setActive: (k, active) => {
-    const now = Date.now();
-    setState((st) => ({ ...st, [k]: { ...st[k], active, last: now } }));
-    const fr = getState().lang === "fr";
-    return { ...ok(active ? "ok.productionStarted" : "ok.productionPaused"), message: active ? (fr ? "Production démarrée." : "Production started.") : (fr ? "Production mise en pause." : "Production paused.") };
-  },
 };
 export const marketService: MarketService = mock;
 export const walletService: WalletService = mock;
