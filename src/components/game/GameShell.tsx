@@ -6,6 +6,7 @@ import { hydrate, useGame } from "@/game/store";
 import { useT } from "@/game/i18n";
 import { fmtMoney, levelNeed } from "@/game/logic";
 import { settingsService, type Result } from "@/game/services";
+import { playGameSound } from "@/game/sound";
 import { PanelHost, type Act, type Panel } from "./panels";
 import { Avatar } from "./icons";
 
@@ -49,7 +50,7 @@ export function GameShell() {
 
   const act: Act = (r: Result, target) => {
     const msg = t(r.key, r.vars);
-    if (r.ok) toast.success(msg);
+    if (r.ok) { toast.success(msg); playGameSound(r.key, r.vars); }
     else toast.error(msg);
     if (r.ok && r.fx && target !== undefined) ctrl.current?.float(target, r.fx);
   };
