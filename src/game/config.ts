@@ -112,7 +112,20 @@ export function getConfig(): GameConfig {
 export function loadConfig() {
   try {
     const raw = localStorage.getItem(KEY);
-    current = raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : DEFAULT_CONFIG;
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<GameConfig>;
+      current = {
+        ...DEFAULT_CONFIG,
+        ...saved,
+        fishing: { ...DEFAULT_CONFIG.fishing, ...saved.fishing },
+        wallet: { ...DEFAULT_CONFIG.wallet, ...saved.wallet },
+        hive: { ...DEFAULT_CONFIG.hive, ...saved.hive },
+        coop: { ...DEFAULT_CONFIG.coop, ...saved.coop },
+        ticker: { ...DEFAULT_CONFIG.ticker, ...saved.ticker },
+      };
+    } else {
+      current = DEFAULT_CONFIG;
+    }
   } catch {
     current = DEFAULT_CONFIG;
   }
