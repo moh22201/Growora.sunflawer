@@ -166,7 +166,7 @@ function FishingPanel({ close, act }: { close: () => void; act: Act }) {
             {t("fish.rod")} · {t("common.level")} {s.rodLevel + 1}
           </p>
           <p className="text-xs text-muted-foreground">
-            {t("fish.castTime")}: {rod.castMinutes}m · +{Math.round(rod.rareBonus * 100)}%
+            {t("fish.castTime")}: {rod.castMinutes}m · +{Math.round(rod.rareBonus * 100)}% · {fmtMoney(cfg.castCost)}/{t("fish.cast")}
           </p>
         </div>
         <PixelButton size="sm" variant="blue" disabled={!next} onClick={() => act(fishingService.upgradeRod())}>
