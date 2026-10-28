@@ -16,7 +16,7 @@ const ok = (key: string, vars?: Vars, fx?: string): Result => ({ ok: true, key, 
 const fail = (key: string, vars?: Vars): Result => ({ ok: false, key, vars });
 
 export interface FarmService {
-  buySeed(cropId: string, n: number): Result;
+  buySeed(cropId: string, n: number): Result | Promise<Result>;
   plant(plot: number, cropId: string): Result;
   harvest(plot: number): Result;
   unlockPlot(plot: number): Result;
@@ -32,7 +32,7 @@ export interface ProductionService {
   setActive(kind: "hive" | "coop", active: boolean): Result;
 }
 export interface MarketService {
-  sell(itemId: string, qty: string): Result;
+  sell(itemId: string, qty: string): Result | Promise<Result>;
 }
 export interface WalletService {
   transferSalesToPlay(amount: string): Result;
@@ -89,18 +89,23 @@ function pay(cost: Decimal.Value): Result | null {
 class MockGameService
   implements FarmService, FishingService, MarketService, WalletService, AccountService, SettingsService
 {
-  buySeed(cropId: string, n: number) {
-    const c = cropById(cropId);
-    if (!c || n < 1) return fail("err.generic");
-    const cost = D(c.seedPrice).mul(n);
-    const e = pay(cost);
-    if (e) return e;
-    setState((s) =>
-      addTx(
-        { ...s, playBalance: D(s.playBalance).minus(cost).toString(), seeds: { ...s.seeds, [cropId]: (s.seeds[cropId] ?? 0) + n } },
-        { kind: "seed", labelKey: "tx.seed", vars: { n, item: cropId }, amount: cost.neg().toString(), currency: "play" },
-      ),
-    );
+  async buySeed(cropId: string, n: number): Promise<Result> {
+    const crop = cropById(cropId);
+    if (!crop || !Number.isInteger(n) || n < 1 || n > 1000) return fail("err.generic");
+    const { data, error } = await supabase.rpc("growora_game_action", {
+      p_action: "buy_seed",
+      p_payload: { crop_id: cropId, quantity: n },
+      p_request_id: crypto.randomUUID(),
+    });
+    if (error) return { ...fail("err.generic"), message: error.message };
+    setState((s) => addTx({
+      ...s,
+      playBalance: String(data.playBalance),
+      seeds: data.seeds ?? s.seeds,
+    }, {
+      kind: "seed", labelKey: "tx.seed", vars: { n, item: cropId },
+      amount: D(data.cost).neg().toString(), currency: "play",
+    }));
     return ok("ok.seed", { n, item: cropId });
   }
   plant(plot: number, cropId: string) {
@@ -244,32 +249,29 @@ class MockGameService
     );
     return ok("ok.upgrade");
   }
-  sell(itemId: string, qty: string) {
-    return guarded(`sell-${itemId}`, () => {
-      let q: Decimal;
-      try {
-        q = D(qty).toDecimalPlaces(4, Decimal.ROUND_DOWN);
-      } catch {
-        return fail("err.qty");
-      }
-      if (q.lte(0)) return fail("err.qty");
-      const price = itemPrice(itemId);
-      const have = D(getState().inventory[itemId] ?? 0);
-      if (!price) return fail("err.generic");
-      if (have.lt(q)) return fail("err.inventory");
-      const total = q.mul(price).toDecimalPlaces(4, Decimal.ROUND_DOWN);
-      setState((s) =>
-        addTx(
-          {
-            ...s,
-            inventory: { ...s.inventory, [itemId]: D(s.inventory[itemId] ?? 0).minus(q).toString() },
-            salesBalance: D(s.salesBalance).plus(total).toString(),
-          },
-          { kind: "sale", labelKey: "tx.sale", vars: { qty: q.toString(), item: itemId }, amount: total.toString(), currency: "sales" },
-        ),
-      );
-      return ok("ok.sell", { qty: q.toString(), item: itemId, total: total.toString() });
+  async sell(itemId: string, qty: string): Promise<Result> {
+    let q: Decimal;
+    try { q = D(qty).toDecimalPlaces(4, Decimal.ROUND_DOWN); } catch { return fail("err.qty"); }
+    if (q.lte(0)) return fail("err.qty");
+    if (!itemPrice(itemId)) return fail("err.generic");
+    const { data, error } = await supabase.rpc("growora_game_action", {
+      p_action: "sell_item",
+      p_payload: { item_id: itemId, quantity: q.toString() },
+      p_request_id: crypto.randomUUID(),
     });
+    if (error) {
+      if (error.message.includes("insufficient_inventory")) return fail("err.inventory");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    setState((s) => addTx({
+      ...s,
+      salesBalance: String(data.salesBalance),
+      inventory: data.inventory ?? s.inventory,
+    }, {
+      kind: "sale", labelKey: "tx.sale",
+      vars: { qty: q.toString(), item: itemId }, amount: String(data.total), currency: "sales",
+    }));
+    return ok("ok.sell", { qty: q.toString(), item: itemId, total: String(data.total) });
   }
   transferSalesToPlay(amount: string) {
     let a: Decimal;
