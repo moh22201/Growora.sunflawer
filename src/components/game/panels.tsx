@@ -285,6 +285,7 @@ function SellList({ kind, act }: { kind: "crop" | "fish" | "honey" | "egg"; act:
   const [qtys, setQtys] = useState<Record<string, string>>({});
   return (
     <div className="space-y-1.5">
+      {confirm && <ConfirmSell {...confirm} onDone={() => setConfirm(null)} act={act} />}
       {ids.map((id) => {
         const have = D(s.inventory[id] ?? 0);
         const price = itemPrice(id) ?? "0";
@@ -315,7 +316,6 @@ function SellList({ kind, act }: { kind: "crop" | "fish" | "honey" | "egg"; act:
           </Row>
         );
       })}
-      {confirm && <ConfirmSell {...confirm} onDone={() => setConfirm(null)} act={act} />}
     </div>
   );
 }
