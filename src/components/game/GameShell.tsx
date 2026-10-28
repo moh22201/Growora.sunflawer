@@ -12,6 +12,7 @@ import { settingsService, type Result } from "@/game/services";
 import { playGameSound } from "@/game/sound";
 import { PanelHost, type Act, type Panel } from "./panels";
 import { Avatar } from "./icons";
+import { WelcomeScreen } from "./WelcomeScreen";
 
 const toPanel = (s: Selectable): Panel => {
   switch (s.type) {
@@ -31,6 +32,7 @@ export function GameShell() {
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataReady, setDataReady] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
   const [sceneVersion, setSceneVersion] = useState(0);
   const currentUserId = useRef<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -147,6 +149,9 @@ export function GameShell() {
 
   if (authLoading) {
     return <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-[#102d2a] text-emerald-100"><span className="font-display text-2xl">GROWORA</span><span className="text-sm text-white/60">{s.lang === "fr" ? "Chargement du compte…" : "Loading player account…"}</span></div>;
+  }
+  if (showWelcome) {
+    return <WelcomeScreen isReady={s.profile.loggedIn && dataReady} onEnter={() => setShowWelcome(false)} />;
   }
   if (!s.profile.loggedIn || !dataReady) return <AuthScreen />;
 
