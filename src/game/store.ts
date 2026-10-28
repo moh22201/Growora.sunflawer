@@ -61,7 +61,7 @@ export function makeDefault(now: number): GameState {
     coop: { level: 0, last: now, stored: "0" },
     txs: [],
     lang: "en",
-    speed: 60,
+    speed: 1,
     profile: { name: "Demo Farmer", email: "", loggedIn: false, avatar: 0 },
   };
 }
@@ -95,7 +95,12 @@ export function hydrate() {
   const fresh = makeDefault(Date.now());
   try {
     const raw = localStorage.getItem(KEY);
-    state = raw ? { ...fresh, ...JSON.parse(raw) } : fresh;
+    if (raw) {
+      const savedState = JSON.parse(raw) as Partial<GameState>;
+      state = { ...fresh, ...savedState, playBalance: "0", speed: 1 };
+    } else {
+      state = fresh;
+    }
     const saved = localStorage.getItem("growora-lang");
     if (!raw && (saved === "en" || saved === "fr")) state.lang = saved;
   } catch {
