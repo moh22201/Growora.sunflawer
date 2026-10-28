@@ -32,7 +32,7 @@ export interface GameConfig {
   xpPerLevel: number;
   crops: CropDef[];
   plots: { level: number; cost: string }[];
-  fishing: { expireMinutes: number; missChance: number; xp: number; fish: FishDef[]; rods: RodDef[] };
+  fishing: { castCost: string; expireMinutes: number; missChance: number; xp: number; fish: FishDef[]; rods: RodDef[] };
   hive: { honeyPrice: string; xp: number; levels: ProdLevel[] };
   coop: { eggPrice: string; xp: number; levels: ProdLevel[] };
   wallet: { network: string; minWithdrawal: string; feePercent: string; networkFee: string };
@@ -40,7 +40,7 @@ export interface GameConfig {
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
-  startingPlayBalance: "50",
+  startingPlayBalance: "0",
   xpPerLevel: 100,
   crops: [
     { id: "wheat", seedPrice: "1", growHours: 1, harvestQty: "100.4167", salePrice: "0.01", xp: 5, color: 0xf2c94c },
@@ -55,16 +55,17 @@ export const DEFAULT_CONFIG: GameConfig = {
   ],
   plots: [
     { level: 1, cost: "0" },
-    { level: 1, cost: "5" },
-    { level: 2, cost: "10" },
-    { level: 3, cost: "20" },
-    { level: 4, cost: "35" },
-    { level: 5, cost: "50" },
-    { level: 6, cost: "75" },
-    { level: 8, cost: "100" },
-    { level: 10, cost: "150" },
+    { level: 1, cost: "0.50" },
+    { level: 2, cost: "1" },
+    { level: 3, cost: "2" },
+    { level: 4, cost: "4" },
+    { level: 5, cost: "7" },
+    { level: 6, cost: "12" },
+    { level: 8, cost: "20" },
+    { level: 10, cost: "35" },
   ],
   fishing: {
+    castCost: "0.05",
     expireMinutes: 30,
     missChance: 0.1,
     xp: 6,
@@ -98,7 +99,7 @@ export const DEFAULT_CONFIG: GameConfig = {
       { cost: "45", perHour: "4", capacity: "40" },
     ],
   },
-  wallet: { network: "USDT (network to be configured)", minWithdrawal: "10", feePercent: "2", networkFee: "1" },
+  wallet: { network: "USDT (network to be configured)", minWithdrawal: "10", feePercent: "5", networkFee: "0" },
   ticker: { enabled: true, maxItems: 10 },
 };
 
