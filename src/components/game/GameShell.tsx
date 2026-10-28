@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Backpack, Egg, Fish, Hexagon, Settings, Sprout, Store, Wallet } from "lucide-react";
-import type { Area, GameController, Selectable } from "@/game/scene";
+import { createGame, type Area, type GameController, type Selectable } from "@/game/scene";
 import { hydrate, setState, useGame } from "@/game/store";
 import { supabase } from "@/lib/supabase";
 import { loadPlayerState, savePlayerState } from "@/game/cloud";
@@ -84,11 +84,15 @@ export function GameShell() {
   useEffect(() => {
     if (!s.profile.loggedIn || !dataReady) return;
     let dead = false;
-    import("@/game/scene").then(({ createGame }) => {
-      if (dead || !host.current) return;
+    try {
+      if (!host.current) return;
       ctrl.current = createGame(host.current, { onSelect: (sel) => setPanel(toPanel(sel)) });
       setLoading(false);
-    });
+    } catch (error) {
+      console.error("Unable to start Growora island", error);
+      setLoading(false);
+      toast.error("The island could not start. Please reload the game.");
+    }
     return () => {
       dead = true;
       ctrl.current?.destroy();
