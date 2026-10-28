@@ -20,16 +20,16 @@ export interface FarmService {
   buySeed(cropId: string, n: number): Result | Promise<Result>;
   plant(plot: number, cropId: string): Result;
   harvest(plot: number): Result;
-  unlockPlot(plot: number): Result;
+  unlockPlot(plot: number): Result | Promise<Result>;
 }
 export interface FishingService {
-  cast(): Result;
+  cast(): Result | Promise<Result>;
   collect(): Result;
-  upgradeRod(): Result;
+  upgradeRod(): Result | Promise<Result>;
 }
 export interface ProductionService {
   collect(kind: "hive" | "coop"): Result;
-  upgrade(kind: "hive" | "coop"): Result;
+  upgrade(kind: "hive" | "coop"): Result | Promise<Result>;
   setActive(kind: "hive" | "coop", active: boolean): Result;
 }
 export interface MarketService {
@@ -142,38 +142,42 @@ class MockGameService
       return ok("ok.harvest", { qty: c.harvestQty, item: c.id }, `+${D(c.harvestQty).toFixed(2)}`);
     });
   }
-  unlockPlot(plot: number) {
+  async unlockPlot(plot: number): Promise<Result> {
     const s = getState();
     const req = getConfig().plots[plot];
     if (!req || s.unlocked[plot]) return fail("err.generic");
     if (plot > 0 && !s.unlocked[plot - 1]) return fail("err.prevPlot");
     if (s.level < req.level) return fail("err.level", { level: req.level });
-    const e = pay(req.cost);
-    if (e) return e;
-    setState((st) =>
-      addTx(
-        { ...st, playBalance: D(st.playBalance).minus(req.cost).toString(), unlocked: st.unlocked.map((u, i) => u || i === plot) },
-        { kind: "unlock", labelKey: "tx.unlock", vars: { n: plot + 1 }, amount: D(req.cost).neg().toString(), currency: "play" },
-      ),
-    );
+    const { data, error } = await supabase.rpc("growora_spend_action", {
+      p_action: "unlock_plot", p_payload: { plot_index: plot }, p_request_id: crypto.randomUUID(),
+    });
+    if (error) {
+      if (error.message.includes("insufficient_play_balance")) return fail("err.funds", { cost: req.cost });
+      return { ...fail("err.generic"), message: error.message };
+    }
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
+    setState((st) => addTx({
+      ...st, playBalance: String(data.playBalance), unlocked: data.saveData?.unlocked ?? st.unlocked,
+    }, { kind: "unlock", labelKey: "tx.unlock", vars: { n: plot + 1 }, amount: D(data.cost).neg().toString(), currency: "play" }));
     return ok("ok.unlock", { n: plot + 1 }, "🔓");
   }
-  cast() {
+  async cast(): Promise<Result> {
     const s = getState();
     if (s.fishing && fishingStatus(s, Date.now()) !== "expired") return fail("err.alreadyFishing");
     const cfg = getConfig().fishing;
-    const cost = D(cfg.castCost);
-    const e = pay(cost);
-    if (e) return e;
-    const rod = cfg.rods[s.rodLevel];
-    const now = Date.now();
-    const wait = rod.castMinutes * MIN;
-    const expire = cfg.expireMinutes * MIN;
-    setState((st) => addTx(
-      { ...st, playBalance: D(st.playBalance).minus(cost).toString(), fishing: { castAt: now, readyAt: now + wait, expiresAt: now + wait + expire } },
-      { kind: "upgrade", labelKey: "tx.fishingCast", vars: { cost: cost.toString() }, amount: cost.neg().toString(), currency: "play" },
-    ));
-    return ok("ok.cast", { cost: cost.toString() }, "〰");
+    const { data, error } = await supabase.rpc("growora_spend_action", {
+      p_action: "cast_fishing", p_payload: {}, p_request_id: crypto.randomUUID(),
+    });
+    if (error) {
+      if (error.message.includes("insufficient_play_balance")) return fail("err.funds", { cost: cfg.castCost });
+      if (error.message.includes("already_fishing")) return fail("err.alreadyFishing");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
+    setState((st) => addTx({
+      ...st, playBalance: String(data.playBalance), fishing: data.saveData?.fishing ?? st.fishing,
+    }, { kind: "upgrade", labelKey: "tx.fishingCast", vars: { cost: cfg.castCost }, amount: D(data.cost).neg().toString(), currency: "play" }));
+    return ok("ok.cast", { cost: cfg.castCost }, "〰");
   }
   collect() {
     return guarded("fish", () => {
@@ -207,18 +211,22 @@ class MockGameService
       return ok("ok.fish", { qty: fish.qty, item: fish.id }, `+${fish.qty} 🐟`);
     });
   }
-  upgradeRod() {
+  async upgradeRod(): Promise<Result> {
     const s = getState();
     const next = getConfig().fishing.rods[s.rodLevel + 1];
     if (!next) return fail("err.maxLevel");
-    const e = pay(next.cost);
-    if (e) return e;
-    setState((st) =>
-      addTx(
-        { ...st, rodLevel: st.rodLevel + 1, playBalance: D(st.playBalance).minus(next.cost).toString() },
-        { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: "rod" }, amount: D(next.cost).neg().toString(), currency: "play" },
-      ),
-    );
+    const { data, error } = await supabase.rpc("growora_spend_action", {
+      p_action: "upgrade_rod", p_payload: {}, p_request_id: crypto.randomUUID(),
+    });
+    if (error) {
+      if (error.message.includes("insufficient_play_balance")) return fail("err.funds", { cost: next.cost });
+      if (error.message.includes("max_level")) return fail("err.maxLevel");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
+    setState((st) => addTx({
+      ...st, playBalance: String(data.playBalance), rodLevel: Number(data.saveData?.rodLevel ?? st.rodLevel),
+    }, { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: "rod" }, amount: D(data.cost).neg().toString(), currency: "play" }));
     return ok("ok.upgrade");
   }
   collectProd(kind: "hive" | "coop") {
@@ -235,20 +243,25 @@ class MockGameService
       return ok("ok.collect", { qty: whole.toString(), item }, `+${whole.toString()}`);
     });
   }
-  upgradeProd(kind: "hive" | "coop") {
+  async upgradeProd(kind: "hive" | "coop"): Promise<Result> {
     const s = getState();
     const next = getConfig()[kind].levels[s[kind].level + 1];
     if (!next) return fail("err.maxLevel");
-    const e = pay(next.cost);
-    if (e) return e;
     const now = Date.now();
     const { amount } = production(kind, s, now);
-    setState((st) =>
-      addTx(
-        { ...st, playBalance: D(st.playBalance).minus(next.cost).toString(), [kind]: { level: st[kind].level + 1, active: true, last: now, stored: amount.toString() } },
-        { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: kind }, amount: D(next.cost).neg().toString(), currency: "play" },
-      ),
-    );
+    const { data, error } = await supabase.rpc("growora_spend_action", {
+      p_action: "upgrade_production", p_payload: { kind }, p_request_id: crypto.randomUUID(),
+    });
+    if (error) {
+      if (error.message.includes("insufficient_play_balance")) return fail("err.funds", { cost: next.cost });
+      if (error.message.includes("max_level")) return fail("err.maxLevel");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
+    setState((st) => addTx({
+      ...st, playBalance: String(data.playBalance),
+      [kind]: { ...st[kind], level: Number(data.saveData?.[kind]?.level ?? st[kind].level + 1), active: true, last: now, stored: amount.toString() },
+    }, { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: kind }, amount: D(data.cost).neg().toString(), currency: "play" }));
     return ok("ok.upgrade");
   }
   setActive(kind: "hive" | "coop", active: boolean): Result {
@@ -343,7 +356,7 @@ class MockGameService
     const destination = address.trim();
     let a: Decimal;
     try { a = D(amount); } catch { return fail("err.qty"); }
-    if (a.lt(10)) return fail("err.minWithdraw", { min: "10" });
+    if (a.lt(5)) return fail("err.minWithdraw", { min: "5" });
     if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
     const { data, error } = await supabase.rpc("request_withdrawal", {
       p_amount: a.toString(),
@@ -352,7 +365,7 @@ class MockGameService
     if (error) {
       const message = error.message || "Unable to submit withdrawal.";
       if (message.includes("invalid_destination")) return fail("err.address");
-      if (message.includes("minimum_withdrawal_10")) return fail("err.minWithdraw", { min: "10" });
+      if (message.includes("minimum_withdrawal_5")) return fail("err.minWithdraw", { min: "5" });
       if (message.includes("insufficient_sales_balance")) return fail("err.salesFunds");
       return { ...fail("err.generic"), message };
     }
