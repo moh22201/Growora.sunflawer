@@ -50,8 +50,9 @@ export function growMs(hours: number, speed: number) {
 export function production(kind: "hive" | "coop", s: GameState, now: number) {
   const lv = getConfig()[kind].levels[s[kind].level];
   const elapsedH = Math.max(0, now - s[kind].last) / HOUR;
-  const amt = Decimal.min(D(lv.capacity), D(s[kind].stored).plus(D(lv.perHour).mul(elapsedH).mul(s.speed)));
-  return { amount: amt.toDecimalPlaces(4), capacity: D(lv.capacity), perHour: D(lv.perHour), level: lv };
+  const rate = s[kind].active ? D(lv.perHour) : D(0);
+  const amt = Decimal.min(D(lv.capacity), D(s[kind].stored).plus(rate.mul(elapsedH).mul(s.speed)));
+  return { amount: amt.toDecimalPlaces(4), capacity: D(lv.capacity), perHour: rate, level: lv };
 }
 
 export type FishStatus = "idle" | "waiting" | "ready" | "expired";
