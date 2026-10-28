@@ -265,7 +265,7 @@ function MarketPanel({ close, act }: { close: () => void; act: Act }) {
         onChange={setTab}
         items={[
           { id: "crop", label: t("nav.farm") },
-          { id: "fish", label: t("nav.fishing") },
+          { id: "fish", label: t("market.fish") },
           { id: "honey", label: t("nav.honey") },
           { id: "egg", label: t("nav.eggs") },
           { id: "seeds", label: t("market.seeds") },
