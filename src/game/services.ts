@@ -36,7 +36,8 @@ export interface MarketService {
 }
 export interface WalletService {
   transferSalesToPlay(amount: string): Result;
-  requestDeposit(amount: string, paymentReference: string): Promise<Result>;
+  createDepositIntent(amount: string): Promise<Result>;
+  requestDeposit(amount: string, paymentReference: string, intentId: string): Promise<Result>;
   requestWithdrawal(address: string, amount: string): Promise<Result>;
 }
 export interface AccountService {
@@ -287,14 +288,27 @@ class MockGameService
     );
     return ok("ok.transfer");
   }
-  async requestDeposit(amount: string, paymentReference: string): Promise<Result> {
+  async createDepositIntent(amount: string): Promise<Result> {
     let a: Decimal;
     try { a = D(amount); } catch { return fail("err.qty"); }
-    if (a.lt(1)) return fail("err.minDeposit", { min: "1" });
+    if (a.lt(1) || !a.eq(a.toDecimalPlaces(2, Decimal.ROUND_DOWN))) {
+      return { ...fail("err.minDeposit", { min: "1" }), message: "Enter a deposit amount of at least 1 USDT with no more than 2 decimal places." };
+    }
+    const { data, error } = await supabase.rpc("create_deposit_intent", { p_amount: a.toString() });
+    if (error) return { ...fail("err.generic"), message: error.message };
+    return {
+      ...ok("ok.depositIntent", { amount: String(data.amount), id: String(data.request_id) }),
+      message: `Deposit instruction created. Send exactly ${data.amount} USDT to the address shown, then paste the transaction hash.`,
+    };
+  }
+  async requestDeposit(amount: string, paymentReference: string, intentId: string): Promise<Result> {
+    let a: Decimal;
+    try { a = D(amount); } catch { return fail("err.qty"); }
     const txHash = paymentReference.trim();
     if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) return { ...fail("err.txReference"), message: "Paste the full transaction hash from your BEP-20 USDT transfer." };
+    if (!intentId) return { ...fail("err.generic"), message: "Create a deposit instruction first." };
     const { data, error } = await supabase.functions.invoke("verify-deposit", {
-      body: { amount: a.toString(), txHash },
+      body: { amount: a.toString(), txHash, intentId },
     });
     if (error || data?.error) return { ...fail("err.generic"), message: data?.error || error?.message || "Could not verify the transfer." };
     setState((s) => addTx({
