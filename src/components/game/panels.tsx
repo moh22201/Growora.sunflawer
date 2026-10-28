@@ -568,13 +568,11 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
             <span className="text-xs text-muted-foreground">{t("wallet.depositAddr")}</span>
             <span className="break-all font-mono text-xs">{DEPOSIT_ADDRESS}</span>
           </Row>
-          <DemoNote>{t("wallet.depositNote")}</DemoNote>
+          <p className="text-xs text-muted-foreground">{s.lang === "fr" ? "Le dépôt est vérifié automatiquement sur BNB Smart Chain et crédité après 12 confirmations réseau. Utilisez uniquement USDT BEP-20." : "Deposits are verified automatically on BNB Smart Chain and credited after 12 network confirmations. Use USDT BEP-20 only."}</p>
           <Field label={t("wallet.amount")} value={depositAmt} inputMode="decimal" onChange={(e) => setDepositAmt(e.target.value)} placeholder="1.00" />
           <Field label={t("wallet.txReference")} value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder={t("wallet.txReferenceHint")} />
           <PixelButton className="w-full" onClick={() => {
             act(walletService.requestDeposit(depositAmt || "0", paymentReference));
-            setDepositAmt("");
-            setPaymentReference("");
           }}>
             {t("wallet.submitDeposit")}
           </PixelButton>
@@ -591,7 +589,7 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
             <p className="flex justify-between"><span>{t("wallet.netFee")}</span><span>{fmtMoney(w.networkFee)}</span></p>
             <p className="flex justify-between font-semibold"><span>{t("wallet.receive")}</span><span>{fmtMoney(receive)}</span></p>
           </div>
-          <DemoNote>{t("wallet.withdrawNote")}</DemoNote>
+          <p className="text-xs text-muted-foreground">{s.lang === "fr" ? "Le montant demandé est réservé immédiatement. Le paiement USDT BEP-20 est envoyé manuellement par l’administration après traitement." : "The requested amount is reserved immediately. The USDT BEP-20 payout is sent manually by the administrator after processing."}</p>
           <PixelButton className="w-full" onClick={() => act(walletService.requestWithdrawal(addr, wAmt || "0"))}>
             {t("wallet.submit")}
           </PixelButton>
