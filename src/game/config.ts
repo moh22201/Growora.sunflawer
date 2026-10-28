@@ -39,6 +39,8 @@ export interface GameConfig {
   ticker: { enabled: boolean; maxItems: number };
 }
 
+export const DEPOSIT_ADDRESS = "0xb5070306324dd921242a431492cc4fdd8f245e21";
+
 export const DEFAULT_CONFIG: GameConfig = {
   startingPlayBalance: "0",
   xpPerLevel: 100,
@@ -99,7 +101,7 @@ export const DEFAULT_CONFIG: GameConfig = {
       { cost: "45", perHour: "4", capacity: "40" },
     ],
   },
-  wallet: { network: "USDT (network to be configured)", minWithdrawal: "10", feePercent: "5", networkFee: "0" },
+  wallet: { network: "USDT · BNB Smart Chain (BEP-20)", minWithdrawal: "10", feePercent: "5", networkFee: "0" },
   ticker: { enabled: true, maxItems: 10 },
 };
 
