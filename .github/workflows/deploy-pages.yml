@@ -42,12 +42,16 @@ jobs:
             find . -maxdepth 3 -type d \( -name client -o -name public \) -print
             exit 1
           fi
-          if [ ! -f "$SITE_DIR/index.html" ]; then
-            echo "No index.html was produced in $SITE_DIR."
+          if [ -f "$SITE_DIR/_shell.html" ]; then
+            cp "$SITE_DIR/_shell.html" "$SITE_DIR/index.html"
+            cp "$SITE_DIR/_shell.html" "$SITE_DIR/404.html"
+          elif [ -f "$SITE_DIR/index.html" ]; then
+            cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
+          else
+            echo "No static HTML shell was produced in $SITE_DIR."
             ls -la "$SITE_DIR"
             exit 1
           fi
-          cp "$SITE_DIR/index.html" "$SITE_DIR/404.html"
           touch "$SITE_DIR/.nojekyll"
 
       - name: Upload Pages artifact
