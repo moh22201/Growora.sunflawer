@@ -8,7 +8,7 @@ import { accountService, farmService, fishingService, marketService, productionS
 import { useGame, type Tx } from "@/game/store";
 import { useT } from "@/game/i18n";
 import { soundEnabled, setSoundEnabled } from "@/game/sound";
-import { Bar, DemoNote, Field, PixelButton, Row, Sheet, Tabs } from "./ui";
+import { Bar, Field, PixelButton, Row, Sheet, Tabs } from "./ui";
 import { AVATAR_COUNT, Avatar, ItemIcon } from "./icons";
 
 export type Panel =
