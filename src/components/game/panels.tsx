@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 import Decimal from "decimal.js";
 import { Backpack, Egg, Fish, Hexagon, Settings, Sprout, Store, User, Wallet } from "lucide-react";
@@ -508,6 +509,27 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
   const [depositAmt, setDepositAmt] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [depositIntentId, setDepositIntentId] = useState("");
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+      const { data } = await supabase
+        .from("deposit_requests")
+        .select("id,amount,submitted_at")
+        .eq("user_id", auth.user.id)
+        .eq("payment_method", "auto_intent")
+        .eq("status", "pending")
+        .order("submitted_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (active && data && Date.now() - Date.parse(data.submitted_at) <= 24 * 60 * 60 * 1000) {
+        setDepositIntentId(data.id);
+        setDepositAmt(String(data.amount));
+      }
+    })();
+    return () => { active = false; };
+  }, []);
   let fee = D(0);
   let receive = D(0);
   try {
