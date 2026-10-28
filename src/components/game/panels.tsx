@@ -649,7 +649,7 @@ function SettingsPanel({ close }: { close: () => void }) {
         ) : (
           <PixelButton variant="danger" size="sm" onClick={() => setConfirm(true)}>{t("set.reset")}</PixelButton>
         )}
-        <a href="/admin" className="block text-sm underline">{t("set.admin")} →</a>
+        <a href={`${import.meta.env.BASE_URL}admin`} className="block text-sm underline">{t("set.admin")} →</a>
       </div>
     </Sheet>
   );
