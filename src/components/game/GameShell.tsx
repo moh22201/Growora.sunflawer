@@ -118,6 +118,10 @@ export function GameShell() {
           </div>
         )}
         {panel && <PanelHost panel={panel} close={() => setPanel(null)} act={act} />}
+        <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-2">
+          <button onClick={() => ctrl.current?.zoom(1.2)} aria-label="Zoom in" title="Zoom in" className="hud-chip flex size-10 items-center justify-center font-display text-xl text-primary">+</button>
+          <button onClick={() => ctrl.current?.zoom(1 / 1.2)} aria-label="Zoom out" title="Zoom out" className="hud-chip flex size-10 items-center justify-center font-display text-xl text-primary">−</button>
+        </div>
       </div>
 
       {/* Bottom nav */}
