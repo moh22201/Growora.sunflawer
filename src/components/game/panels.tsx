@@ -690,14 +690,6 @@ function LangSpeed() {
           </PixelButton>
         ))}
       </div>
-      <p className="font-display text-[10px]">{t("set.speed")}</p>
-      <div className="flex flex-wrap gap-2">
-        {[1, 60, 600, 3600].map((n) => (
-          <PixelButton key={n} size="sm" variant={s.speed === n ? "gold" : "ghost"} onClick={() => settingsService.setSpeed(n)}>
-            ×{n}
-          </PixelButton>
-        ))}
-      </div>
       <p className="text-xs text-muted-foreground">{t("set.speedNote")}</p>
     </>
   );
