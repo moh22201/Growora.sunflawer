@@ -1,5 +1,4 @@
-// @lovable.dev/vite-tanstack-config includes the TanStack Start, React,
-// Tailwind, path alias and Nitro plugins.
+// Keep the Lovable TanStack Start defaults; they configure Nitro for Netlify.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
@@ -7,18 +6,12 @@ export default defineConfig({
     base: process.env.NETLIFY ? "/" : "/Growora.sunflawer/",
   },
   tanstackStart: {
-    server: { entry: "server" },
-  },
-  // This option belongs at the top level, not inside tanstackStart.
-  prerender: {
-    enabled: false,
-  },
-  nitro: {
-    preset: "netlify",
-    output: {
-      dir: ".netlify",
-      serverDir: ".netlify/functions-internal/server",
-      publicDir: "dist/client",
+    spa: {
+      enabled: true,
     },
+    prerender: {
+      enabled: false,
+    },
+    server: { entry: "server" },
   },
 });
