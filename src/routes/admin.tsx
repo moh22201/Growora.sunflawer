@@ -1,48 +1,212 @@
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { getConfig } from "@/game/config";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Growora — Admin" }] }),
   component: AdminPage,
 });
 
+type Deposit = {
+  id: string;
+  user_id: string;
+  amount: number;
+  currency: string;
+  payment_method: string;
+  payment_reference: string | null;
+  status: string;
+  submitted_at: string;
+};
+type Withdrawal = {
+  id: string;
+  user_id: string;
+  amount: number;
+  fee_amount: number;
+  payout_amount: number;
+  currency: string;
+  network: string;
+  destination: string;
+  status: string;
+  requested_at: string;
+};
+type Transaction = {
+  id: string;
+  user_id: string;
+  kind: string;
+  wallet: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: string;
+};
+
+const money = (value: number) =>
+  new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(value);
+const date = (value: string) => new Date(value).toLocaleString();
+
 function AdminPage() {
-  const config = getConfig();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [playerCount, setPlayerCount] = useState(0);
+  const [playTotal, setPlayTotal] = useState(0);
+  const [salesTotal, setSalesTotal] = useState(0);
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        setIsAdmin(false);
+        setError("Sign in with the administrator account to open this page.");
+        return;
+      }
+      const { data: admin, error: adminError } = await supabase
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", authData.user.id)
+        .maybeSingle();
+      if (adminError) throw adminError;
+      if (!admin) {
+        setIsAdmin(false);
+        setError("This account does not have administrator access.");
+        return;
+      }
+      setIsAdmin(true);
+
+      const [profilesRes, savesRes, depositsRes, withdrawalsRes, txRes] = await Promise.all([
+        supabase.from("player_profiles").select("id", { count: "exact", head: true }),
+        supabase.from("game_saves").select("save_data"),
+        supabase.from("deposit_requests").select("id,user_id,amount,currency,payment_method,payment_reference,status,submitted_at").order("submitted_at", { ascending: false }).limit(30),
+        supabase.from("withdrawal_requests").select("id,user_id,amount,fee_amount,payout_amount,currency,network,destination,status,requested_at").order("requested_at", { ascending: false }).limit(30),
+        supabase.from("wallet_transactions").select("id,user_id,kind,wallet,amount,currency,status,created_at").order("created_at", { ascending: false }).limit(30),
+      ]);
+      for (const result of [profilesRes, savesRes, depositsRes, withdrawalsRes, txRes]) {
+        if (result.error) throw result.error;
+      }
+      setPlayerCount(profilesRes.count ?? 0);
+      const saves = savesRes.data ?? [];
+      setPlayTotal(saves.reduce((sum, row) => sum + Number(row.save_data?.playBalance ?? 0), 0));
+      setSalesTotal(saves.reduce((sum, row) => sum + Number(row.save_data?.salesBalance ?? 0), 0));
+      setDeposits((depositsRes.data ?? []) as Deposit[]);
+      setWithdrawals((withdrawalsRes.data ?? []) as Withdrawal[]);
+      setTransactions((txRes.data ?? []) as Transaction[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load administrator data.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const pendingDeposits = deposits.filter((item) => item.status === "pending").length;
+  const pendingWithdrawals = withdrawals.filter((item) => item.status === "pending").length;
+
   return (
     <main className="min-h-screen bg-ocean p-4 text-foreground sm:p-8">
-      <div className="mx-auto max-w-3xl space-y-5">
-        <header className="flex items-center justify-between gap-3">
-          <h1 className="font-display text-xl text-primary">GROWORA · ADMIN</h1>
-          <a href={import.meta.env.BASE_URL} className="hud-chip px-3 py-2 text-sm underline">Back to game</a>
-        </header>
-        <p className="text-sm opacity-80">Admin configuration preview. Values are currently read-only and stored in the game configuration.</p>
-        <section className="grid gap-3 sm:grid-cols-2">
-          <article className="hud-chip space-y-2 p-4">
-            <h2 className="font-display text-xs text-primary">Economy</h2>
-            <p>Starting play balance: ${config.startingPlayBalance}</p>
-            <p>Minimum withdrawal: ${config.wallet.minWithdrawal}</p>
-            <p>Withdrawal fee: {config.wallet.feePercent}%</p>
-          </article>
-          <article className="hud-chip space-y-2 p-4">
-            <h2 className="font-display text-xs text-primary">Fishing</h2>
-            <p>Cast cost: ${config.fishing.castCost}</p>
-            <p>Miss chance: {Math.round(config.fishing.missChance * 100)}%</p>
-            <p>Catch expiry: {config.fishing.expireMinutes} minutes</p>
-          </article>
-        </section>
-        <section className="hud-chip space-y-2 p-4">
-          <h2 className="font-display text-xs text-primary">Crops</h2>
-          <div className="space-y-1">
-            {config.crops.map((crop) => (
-              <div key={crop.id} className="flex flex-wrap justify-between gap-2 border-b border-wood/40 py-2 text-sm">
-                <span className="capitalize">{crop.id}</span>
-                <span>${crop.seedPrice} seed · {crop.growHours}h · ${crop.salePrice} sale/unit</span>
-              </div>
-            ))}
+      <div className="mx-auto max-w-5xl space-y-5">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="font-display text-xl text-primary">GROWORA · ADMIN</h1>
+            <p className="mt-1 text-sm opacity-70">Players, balances and payment review</p>
           </div>
-        </section>
-        <p className="text-xs opacity-70">This page is a configuration preview, not a secured production admin panel.</p>
+          <div className="flex gap-2">
+            <button className="hud-chip px-3 py-2 text-sm" onClick={() => void refresh()} disabled={loading}>
+              {loading ? "Loading…" : "Refresh"}
+            </button>
+            <a href={import.meta.env.BASE_URL} className="hud-chip px-3 py-2 text-sm underline">Back to game</a>
+          </div>
+        </header>
+
+        {error && <section role="alert" className="hud-chip border border-destructive/50 p-4 text-sm">{error}</section>}
+
+        {isAdmin && (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Registered players" value={String(playerCount)} />
+              <Metric label="Play balances" value={`$${money(playTotal)}`} />
+              <Metric label="Sales balances" value={`$${money(salesTotal)}`} />
+              <Metric label="Pending requests" value={String(pendingDeposits + pendingWithdrawals)} detail={`${pendingDeposits} deposits · ${pendingWithdrawals} withdrawals`} />
+            </section>
+
+            <section className="hud-chip space-y-3 p-4">
+              <h2 className="font-display text-sm text-primary">Deposit requests</h2>
+              {deposits.length === 0 ? <p className="text-sm opacity-70">No deposit requests yet.</p> : (
+                <div className="space-y-2">
+                  {deposits.map((item) => (
+                    <article key={item.id} className="rounded border border-wood/40 p-3 text-sm">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <strong>${money(Number(item.amount))} {item.currency}</strong>
+                        <span className="capitalize">{item.status}</span>
+                      </div>
+                      <p className="break-all opacity-70">Player: {item.user_id}</p>
+                      <p>Method: {item.payment_method} · {date(item.submitted_at)}</p>
+                      {item.payment_reference && <p className="break-all">Reference: {item.payment_reference}</p>}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="hud-chip space-y-3 p-4">
+              <h2 className="font-display text-sm text-primary">Withdrawal requests</h2>
+              {withdrawals.length === 0 ? <p className="text-sm opacity-70">No withdrawal requests yet.</p> : (
+                <div className="space-y-2">
+                  {withdrawals.map((item) => (
+                    <article key={item.id} className="rounded border border-wood/40 p-3 text-sm">
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <strong>${money(Number(item.amount))} requested · ${money(Number(item.payout_amount))} net</strong>
+                        <span className="capitalize">{item.status}</span>
+                      </div>
+                      <p className="break-all opacity-70">Player: {item.user_id}</p>
+                      <p>Fee: ${money(Number(item.fee_amount))} · {item.network} · {date(item.requested_at)}</p>
+                      <p className="break-all">Destination: {item.destination}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="hud-chip space-y-3 p-4">
+              <h2 className="font-display text-sm text-primary">Recent wallet operations</h2>
+              {transactions.length === 0 ? <p className="text-sm opacity-70">No confirmed wallet operations recorded yet.</p> : (
+                <div className="space-y-2">
+                  {transactions.map((item) => (
+                    <article key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-wood/40 py-2 text-sm">
+                      <div>
+                        <strong className="capitalize">{item.kind}</strong>
+                        <p className="break-all text-xs opacity-70">{item.user_id}</p>
+                      </div>
+                      <div className="text-right">
+                        <p>{money(Number(item.amount))} {item.currency}</p>
+                        <p className="text-xs opacity-70">{item.status} · {date(item.created_at)}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+            <p className="text-xs opacity-70">Payment requests are review-only for now. Confirming deposits, crediting balances and marking payouts paid will be enabled only through secure server-side operations.</p>
+          </>
+        )}
       </div>
     </main>
+  );
+}
+
+function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <article className="hud-chip space-y-1 p-4">
+      <p className="text-xs opacity-70">{label}</p>
+      <p className="font-display text-xl text-primary">{value}</p>
+      {detail && <p className="text-xs opacity-70">{detail}</p>}
+    </article>
   );
 }
