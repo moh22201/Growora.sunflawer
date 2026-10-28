@@ -369,6 +369,7 @@ class MockGameService
       if (message.includes("insufficient_sales_balance")) return fail("err.salesFunds");
       return { ...fail("err.generic"), message };
     }
+    if (data.wallet_revision !== undefined) setWalletRevision(Number(data.wallet_revision));
     setState((s) => addTx({ ...s, salesBalance: String(data.sales_balance) }, {
       kind: "withdraw", labelKey: "tx.withdrawPending", amount: a.neg().toString(),
       currency: "sales", status: "pending", demo: false,
