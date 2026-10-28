@@ -22,7 +22,7 @@ export type Panel =
   | { kind: "account" }
   | { kind: "settings" };
 
-export type Act = (r: Result, fxTarget?: "farm" | "fishing" | "hive" | "coop" | "market" | number) => void;
+export type Act = (r: Result | Promise<Result>, fxTarget?: "farm" | "fishing" | "hive" | "coop" | "market" | number) => void;
 
 export function useNow(ms = 500) {
   const [now, setNow] = useState(() => Date.now());
@@ -612,7 +612,6 @@ function AccountPanel({ close, act }: { close: () => void; act: Act }) {
     : [{ id: "login", label: t("acct.login") }, { id: "register", label: t("acct.register") }, { id: "recover", label: t("acct.recover") }];
   return (
     <Sheet title={t("acct.title")} onClose={close} icon={<User className="size-4" />}>
-      <DemoNote>{t("acct.demoMode")}</DemoNote>
       <div className="flex items-center gap-3">
         <Avatar n={s.profile.avatar} size={44} />
         <div>
@@ -633,7 +632,7 @@ function AccountPanel({ close, act }: { close: () => void; act: Act }) {
           <Field label={t("acct.name")} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
           <Field label={t("acct.email")} type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           <Field label={t("acct.password")} type="password" value={f.pw} onChange={(e) => setF({ ...f, pw: e.target.value })} />
-          <PixelButton className="w-full" onClick={() => act(accountService.register(f.name, f.email, f.pw))}>{t("acct.register")}</PixelButton>
+          <PixelButton className="w-full" onClick={() => act(accountService.register(f.name, f.email, f.pw, f.avatar))}>{t("acct.register")}</PixelButton>
         </>
       )}
       {tab === "recover" && (
