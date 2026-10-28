@@ -170,6 +170,8 @@ class FarmScene extends Phaser.Scene {
   eggs: Phaser.GameObjects.Image[] = [];
   swimmingFish: { s: Phaser.GameObjects.Image; x: number; y: number; range: number; speed: number; phase: number }[] = [];
   fisherman!: Phaser.GameObjects.Image;
+  rodLine!: Phaser.GameObjects.Graphics;
+  rodBobber!: Phaser.GameObjects.Image;
   dirty = true;
   unsub: () => void = () => {};
 
@@ -250,32 +252,49 @@ class FarmScene extends Phaser.Scene {
   }
 
   drawPond() {
+    // A broad, clearly visible coastal fishing bay in the lower-left corner.
     const g = this.add.graphics();
-    g.fillStyle(0x8a8f96, 1);
-    g.fillEllipse(290, 650, 316, 196);
-    g.fillStyle(0x2a9ab8, 1);
-    g.fillEllipse(290, 650, 300, 180);
+    g.fillStyle(0x7c858c, 1);
+    g.fillEllipse(286, 650, 430, 278);
+    g.fillStyle(0x126b91, 1);
+    g.fillEllipse(286, 650, 410, 258);
+    g.fillStyle(0x168eae, 1);
+    g.fillEllipse(276, 642, 366, 222);
     g.fillStyle(0x4fc0d8, 1);
-    g.fillEllipse(282, 642, 250, 140);
+    g.fillEllipse(264, 638, 306, 174);
+    g.fillStyle(0xbff0ff, 0.55);
+    g.fillEllipse(222, 594, 82, 14);
+    g.fillEllipse(330, 682, 96, 12);
     const ripple = this.add.graphics();
-    ripple.lineStyle(3, 0xbff0ff, 0.6);
-    ripple.strokeEllipse(240, 660, 60, 22);
-    ripple.strokeEllipse(330, 620, 40, 14);
-    this.tweens.add({ targets: ripple, alpha: 0.1, duration: 1400, yoyo: true, repeat: -1 });
-    this.add.image(190, 610, "lily");
-    this.add.image(220, 710, "lily").setScale(0.8);
-    this.add.image(360, 700, "lily");
-    // dock
-    const d = this.add.graphics();
+    ripple.lineStyle(3, 0xbff0ff, 0.72);
+    ripple.strokeEllipse(220, 655, 76, 24);
+    ripple.strokeEllipse(326, 620, 54, 18);
+    ripple.strokeEllipse(280, 700, 68, 20);
+    this.tweens.add({ targets: ripple, alpha: 0.12, scaleX: 1.12, duration: 1500, yoyo: true, repeat: -1 });
+    for (let i = 0; i < 6; i++) {
+      const x = 150 + i * 43;
+      const y = 600 + (i % 3) * 38;
+      const fish = this.add.image(x, y, i % 2 ? "fishA" : "fishB")
+        .setScale(i % 2 ? 0.78 : 0.9).setAlpha(0.96).setDepth(25);
+      this.swimmingFish.push({ s: fish, x, y, range: 15 + (i % 3) * 12, speed: 0.0012 + i * 0.00017, phase: i * 1.4 });
+    }
+    this.add.image(164, 616, "lily").setDepth(28);
+    this.add.image(208, 710, "lily").setScale(0.8).setDepth(28);
+    // Wooden pier at the edge of the water.
+    const d = this.add.graphics().setDepth(35);
     d.fillStyle(0x5a3a20, 1);
     d.fillRect(312, 604, 132, 36);
     d.fillStyle(0xb07a44, 1);
     for (let x = 316; x < 440; x += 14) d.fillRect(x, 606, 12, 32);
     d.fillStyle(0x7a4a2a, 1);
     [316, 380, 432].forEach((x) => d.fillRect(x, 638, 8, 14));
-    this.line = this.add.graphics();
-    this.bobber = this.add.image(230, 650, "bobber").setVisible(false);
-    this.alert = this.add.image(230, 615, "alert").setVisible(false);
+    this.fisherman = this.add.image(386, 600, "fisher").setOrigin(0.5, 1).setScale(1.6).setDepth(42);
+    this.tweens.add({ targets: this.fisherman, y: 597, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    this.rodLine = this.add.graphics().setDepth(41);
+    this.rodBobber = this.add.image(286, 656, "bobber").setScale(0.8).setDepth(30);
+    this.line = this.add.graphics().setDepth(43);
+    this.bobber = this.add.image(230, 650, "bobber").setVisible(false).setDepth(44);
+    this.alert = this.add.image(230, 615, "alert").setVisible(false).setDepth(45);
     this.tweens.add({ targets: this.alert, y: 605, duration: 300, yoyo: true, repeat: -1 });
     this.zone(300, 640, 320, 200, { type: "fishing" });
   }
@@ -481,6 +500,18 @@ class FarmScene extends Phaser.Scene {
       b.s.setPosition(952 + Math.cos(a) * b.r, 455 + Math.sin(a * 1.7) * b.r * 0.5);
       b.s.setFlipX(Math.sin(a) > 0);
     });
+    this.swimmingFish.forEach((f) => {
+      const a = time * f.speed + f.phase;
+      f.s.setPosition(f.x + Math.sin(a) * f.range, f.y + Math.sin(a * 0.8) * 5);
+      f.s.setFlipX(Math.cos(a) < 0);
+    });
+    // The decorative fishing line and float sway continuously, independent of gameplay.
+    const tipX = 286 + Math.sin(time / 520) * 14;
+    const tipY = 656 + Math.sin(time / 310) * 4;
+    this.rodBobber.setPosition(tipX, tipY);
+    this.rodLine.clear();
+    this.rodLine.lineStyle(2, 0x5a3a20, 0.95);
+    this.rodLine.lineBetween(386, 574 + Math.sin(time / 700) * 3, tipX, tipY - 3);
     if (this.bobber.visible) this.bobber.y = 650 + Math.sin(time / (this.alert.visible ? 90 : 400)) * (this.alert.visible ? 4 : 2);
   }
 
