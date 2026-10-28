@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
 export const supabase = createClient(
-  "https://zapzgdenckgmtwukcgof.supabase.co",
-  "sb_publishable_yD-VHNTTV3Bd1oA1YslW2A_5dCxGm_U",
+  "https://jsgysongbsoizndqlsvy.supabase.co",
+  "sb_publishable_D3ZgnYLYKRCPzPFAqCtDnQ_2AyUxmKR",
   {
     auth: {
       persistSession: true,
