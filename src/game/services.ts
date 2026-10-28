@@ -18,19 +18,19 @@ const fail = (key: string, vars?: Vars): Result => ({ ok: false, key, vars });
 
 export interface FarmService {
   buySeed(cropId: string, n: number): Result | Promise<Result>;
-  plant(plot: number, cropId: string): Result;
-  harvest(plot: number): Result;
+  plant(plot: number, cropId: string): Result | Promise<Result>;
+  harvest(plot: number): Result | Promise<Result>;
   unlockPlot(plot: number): Result | Promise<Result>;
 }
 export interface FishingService {
   cast(): Result | Promise<Result>;
-  collect(): Result;
+  collect(): Result | Promise<Result>;
   upgradeRod(): Result | Promise<Result>;
 }
 export interface ProductionService {
-  collect(kind: "hive" | "coop"): Result;
+  collect(kind: "hive" | "coop"): Result | Promise<Result>;
   upgrade(kind: "hive" | "coop"): Result | Promise<Result>;
-  setActive(kind: "hive" | "coop", active: boolean): Result;
+  setActive(kind: "hive" | "coop", active: boolean): Result | Promise<Result>;
 }
 export interface MarketService {
   sell(itemId: string, qty: string): Result | Promise<Result>;
@@ -110,37 +110,27 @@ class MockGameService
     }));
     return ok("ok.seed", { n, item: cropId });
   }
-  plant(plot: number, cropId: string) {
-    return guarded(`plot${plot}`, () => {
-      const s = getState();
-      const c = cropById(cropId);
-      if (!c || !s.unlocked[plot]) return fail("err.locked");
-      if (s.plots[plot].cropId) return fail("err.occupied");
-      if ((s.seeds[cropId] ?? 0) < 1) return fail("err.noSeed");
-      const now = Date.now();
-      setState((st) => ({
-        ...st,
-        seeds: { ...st.seeds, [cropId]: st.seeds[cropId] - 1 },
-        plots: st.plots.map((p, i) => (i === plot ? { cropId, plantedAt: now, readyAt: now + growMs(c.growHours, 1) } : p)),
-      }));
-      return ok("ok.plant", { item: cropId }, "🌱");
-    });
+  async plant(plot: number, cropId: string): Promise<Result> {
+    const s = getState();
+    if (!cropById(cropId) || !s.unlocked[plot]) return fail("err.locked");
+    if (!s.plots[plot] || s.plots[plot].cropId) return fail("err.occupied");
+    if ((s.seeds[cropId] ?? 0) < 1) return fail("err.noSeed");
+    const { data, error } = await supabase.rpc("growora_progress_action", { p_action: "plant_crop", p_payload: { plot_index: plot, crop_id: cropId }, p_request_id: crypto.randomUUID() });
+    if (error) return { ...fail("err.generic"), message: error.message };
+    setState((st) => ({ ...st, seeds: data.saveData?.seeds ?? st.seeds, plots: data.saveData?.plots ?? st.plots }));
+    return ok("ok.plant", { item: cropId }, "🌱");
   }
-  harvest(plot: number) {
-    return guarded(`plot${plot}`, () => {
-      const s = getState();
-      const p = s.plots[plot];
-      const c = p?.cropId ? cropById(p.cropId) : undefined;
-      if (!p || !c) return fail("err.nothingToHarvest");
-      if (Date.now() < p.readyAt) return fail("err.notReady");
-      setState((st) =>
-        addXp(
-          addInv({ ...st, plots: st.plots.map((x, i) => (i === plot ? { cropId: null, plantedAt: 0, readyAt: 0 } : x)) }, c.id, c.harvestQty),
-          c.xp,
-        ),
-      );
-      return ok("ok.harvest", { qty: c.harvestQty, item: c.id }, `+${D(c.harvestQty).toFixed(2)}`);
-    });
+  async harvest(plot: number): Promise<Result> {
+    const s = getState(); const p = s.plots[plot]; const c = p?.cropId ? cropById(p.cropId) : undefined;
+    if (!p || !c) return fail("err.nothingToHarvest");
+    if (Date.now() < p.readyAt) return fail("err.notReady");
+    const { data, error } = await supabase.rpc("growora_progress_action", { p_action: "harvest_crop", p_payload: { plot_index: plot }, p_request_id: crypto.randomUUID() });
+    if (error) {
+      if (error.message.includes("crop_not_ready")) return fail("err.notReady");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    setState((st) => ({ ...st, plots: data.saveData?.plots ?? st.plots, inventory: data.saveData?.inventory ?? st.inventory, xp: Number(data.saveData?.xp ?? st.xp), level: Number(data.saveData?.level ?? st.level) }));
+    return ok("ok.harvest", { qty: data.qty, item: data.item }, `+${Number(data.qty).toFixed(2)}`);
   }
   async unlockPlot(plot: number): Promise<Result> {
     const s = getState();
@@ -179,37 +169,19 @@ class MockGameService
     }, { kind: "upgrade", labelKey: "tx.fishingCast", vars: { cost: cfg.castCost }, amount: D(data.cost).neg().toString(), currency: "play" }));
     return ok("ok.cast", { cost: cfg.castCost }, "〰");
   }
-  collect() {
-    return guarded("fish", () => {
-      const s = getState();
-      const st = fishingStatus(s, Date.now());
-      if (st === "idle") return fail("err.notFishing");
-      if (st === "waiting") return fail("err.notReady");
-      if (st === "expired") {
-        setState((x) => ({ ...x, fishing: null }));
-        return fail("err.fishEscaped");
-      }
-      const cfg = getConfig().fishing;
-      const rod = cfg.rods[s.rodLevel];
-      if (Math.random() < cfg.missChance) {
-        setState((x) => ({ ...x, fishing: null }));
-        return fail("err.miss");
-      }
-      // Rarer fish get the rod bonus added to their weight.
-      const weights = cfg.fish.map((f) => f.chance + (f.chance < 0.3 ? rod.rareBonus : 0));
-      const total = weights.reduce((a, b) => a + b, 0);
-      let r = Math.random() * total;
-      let fish = cfg.fish[0];
-      for (let i = 0; i < cfg.fish.length; i++) {
-        r -= weights[i];
-        if (r <= 0) {
-          fish = cfg.fish[i];
-          break;
-        }
-      }
-      setState((x) => addXp(addInv({ ...x, fishing: null }, fish.id, fish.qty), cfg.xp));
-      return ok("ok.fish", { qty: fish.qty, item: fish.id }, `+${fish.qty} 🐟`);
-    });
+  async collect(): Promise<Result> {
+    const s = getState(); const st = fishingStatus(s, Date.now());
+    if (st === "idle") return fail("err.notFishing");
+    if (st === "waiting") return fail("err.notReady");
+    const { data, error } = await supabase.rpc("growora_progress_action", { p_action: "collect_fishing", p_payload: {}, p_request_id: crypto.randomUUID() });
+    if (error) {
+      if (error.message.includes("fish_not_ready")) return fail("err.notReady");
+      if (error.message.includes("not_fishing")) return fail("err.notFishing");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    setState((x) => ({ ...x, fishing: data.saveData?.fishing ?? null, inventory: data.saveData?.inventory ?? x.inventory, xp: Number(data.saveData?.xp ?? x.xp) }));
+    if (data.miss) return fail(st === "expired" ? "err.fishEscaped" : "err.miss");
+    return ok("ok.fish", { qty: data.qty, item: data.item }, `+${data.qty} 🐟`);
   }
   async upgradeRod(): Promise<Result> {
     const s = getState();
@@ -229,19 +201,14 @@ class MockGameService
     }, { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: "rod" }, amount: D(data.cost).neg().toString(), currency: "play" }));
     return ok("ok.upgrade");
   }
-  collectProd(kind: "hive" | "coop") {
-    return guarded(kind, () => {
-      const s = getState();
-      const now = Date.now();
-      const { amount } = production(kind, s, now);
-      const whole = amount.floor();
-      if (whole.lt(1)) return fail("err.notReady");
-      const item = kind === "hive" ? "honey" : "egg";
-      setState((st) =>
-        addXp(addInv({ ...st, [kind]: { ...st[kind], last: now, stored: amount.minus(whole).toString() } }, item, whole), getConfig()[kind].xp),
-      );
-      return ok("ok.collect", { qty: whole.toString(), item }, `+${whole.toString()}`);
-    });
+  async collectProd(kind: "hive" | "coop"): Promise<Result> {
+    const { data, error } = await supabase.rpc("growora_progress_action", { p_action: "collect_production", p_payload: { kind }, p_request_id: crypto.randomUUID() });
+    if (error) {
+      if (error.message.includes("production_not_ready")) return fail("err.notReady");
+      return { ...fail("err.generic"), message: error.message };
+    }
+    setState((st) => ({ ...st, [kind]: data.saveData?.[kind] ?? st[kind], inventory: data.saveData?.inventory ?? st.inventory, xp: Number(data.saveData?.xp ?? st.xp) }));
+    return ok("ok.collect", { qty: String(data.qty), item: data.item }, `+${data.qty}`);
   }
   async upgradeProd(kind: "hive" | "coop"): Promise<Result> {
     const s = getState();
@@ -264,14 +231,10 @@ class MockGameService
     }, { kind: "upgrade", labelKey: "tx.upgrade", vars: { item: kind }, amount: D(data.cost).neg().toString(), currency: "play" }));
     return ok("ok.upgrade");
   }
-  setActive(kind: "hive" | "coop", active: boolean): Result {
-    const current = getState()[kind];
-    if (current.active === active) return ok("ok.saved");
-    const now = Date.now();
-    const elapsed = Math.max(0, now - current.last) / MIN / 60;
-    const level = getConfig()[kind].levels[current.level];
-    const stored = active ? current.stored : D(current.stored).plus(D(level.perHour).mul(elapsed)).toString();
-    setState((s) => ({ ...s, [kind]: { ...s[kind], active, last: now, stored } }));
+  async setActive(kind: "hive" | "coop", active: boolean): Promise<Result> {
+    const { data, error } = await supabase.rpc("growora_progress_action", { p_action: "set_production_active", p_payload: { kind, active }, p_request_id: crypto.randomUUID() });
+    if (error) return { ...fail("err.generic"), message: error.message };
+    setState((s) => ({ ...s, [kind]: data.saveData?.[kind] ?? s[kind] }));
     return ok("ok.saved");
   }
   async sell(itemId: string, qty: string): Promise<Result> {
