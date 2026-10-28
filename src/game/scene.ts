@@ -168,7 +168,8 @@ class FarmScene extends Phaser.Scene {
   alert!: Phaser.GameObjects.Image;
   honeyBar!: Phaser.GameObjects.Graphics;
   eggs: Phaser.GameObjects.Image[] = [];
-  swimmingFish: { s: Phaser.GameObjects.Image; x: number; y: number; range: number; speed: number; phase: number }[] = [];\n  fisherman!: Phaser.GameObjects.Image;
+  swimmingFish: { s: Phaser.GameObjects.Image; x: number; y: number; range: number; speed: number; phase: number }[] = [];
+  fisherman!: Phaser.GameObjects.Image;
   dirty = true;
   unsub: () => void = () => {};
 
