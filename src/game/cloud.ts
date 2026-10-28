@@ -32,6 +32,8 @@ export async function loadPlayerState(user: User) {
       loggedIn: true,
       avatar: Number.isFinite(avatar) ? Math.max(0, Math.min(7, avatar)) : 0,
     },
+    hive: { ...fresh.hive, ...saved.hive, active: Boolean(saved.hive?.active) },
+    coop: { ...fresh.coop, ...saved.coop, active: Boolean(saved.coop?.active) },
     plots: (saved.plots ?? fresh.plots).map((plot) => {
       if (!plot.cropId) return plot;
       return { ...plot, readyAt: plot.readyAt || plot.plantedAt + (cropHours[plot.cropId] ?? 1) * 3_600_000 };
