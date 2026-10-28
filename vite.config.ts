@@ -3,15 +3,17 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
-  // GitHub Pages serves this project from a repository subpath.
+  // GitHub Pages uses a repository subpath; Netlify serves from the domain root.
   vite: {
-    base: "/Growora.sunflawer/",
+    base: process.env.NETLIFY ? "/" : "/Growora.sunflawer/",
   },
-  // The game is a client-rendered interactive SPA; it does not need SSR
-  // for its current local/mock gameplay.
+  // The game is a client-rendered interactive SPA and does not require prerendering.
   tanstackStart: {
     spa: {
       enabled: true,
+    },
+    prerender: {
+      enabled: false,
     },
     server: { entry: "server" },
   },
