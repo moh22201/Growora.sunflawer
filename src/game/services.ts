@@ -5,7 +5,7 @@
  * value server-side — client state must never be trusted for money.
  */
 import Decimal from "decimal.js";
-import { DEPOSIT_ADDRESS, getConfig } from "./config";
+import { getConfig } from "./config";
 import { D, cropById, fishingStatus, growMs, itemPrice, levelNeed, MIN, production } from "./logic";
 import { getState, setState, resetState, type GameState, type Lang, type Tx } from "./store";
 import { supabase } from "@/lib/supabase";
@@ -295,14 +295,14 @@ class MockGameService
     if (reference.length < 8) return fail("err.txReference");
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) return { ...fail("err.credentials"), message: "Log in to submit a deposit request." };
-    const { data, error } = await supabase.from("deposit_requests").insert({
+    const { error } = await supabase.from("deposit_requests").insert({
       user_id: auth.user.id,
       amount: a.toString(),
       currency: "USDT",
       payment_method: "manual",
       payment_reference: reference,
       status: "pending",
-    }).select("id,amount,status,submitted_at").single();
+    });
     if (error) return { ...fail("err.generic"), message: error.message };
     setState((s) => addTx(s, {
       kind: "deposit", labelKey: "tx.depositPending", amount: a.toString(),
@@ -320,14 +320,14 @@ class MockGameService
     if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
     const { data: auth, error: authError } = await supabase.auth.getUser();
     if (authError || !auth.user) return { ...fail("err.credentials"), message: "Log in to request a withdrawal." };
-    const { data, error } = await supabase.from("withdrawal_requests").insert({
+    const { error } = await supabase.from("withdrawal_requests").insert({
       user_id: auth.user.id,
       amount: a.toString(),
       currency: "USDT",
       network: "BNB Smart Chain (BEP-20)",
       destination,
       status: "pending",
-    }).select("id,amount,fee_amount,payout_amount,status,requested_at").single();
+    });
     if (error) return { ...fail("err.generic"), message: error.message };
     setState((s) => addTx(s, {
       kind: "withdraw", labelKey: "tx.withdrawPending", amount: a.neg().toString(),
