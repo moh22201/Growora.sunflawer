@@ -84,17 +84,29 @@ export function GameShell() {
   useEffect(() => {
     if (!s.profile.loggedIn || !dataReady) return;
     let dead = false;
-    try {
-      if (!host.current) return;
-      ctrl.current = createGame(host.current, { onSelect: (sel) => setPanel(toPanel(sel)) });
-      setLoading(false);
-    } catch (error) {
-      console.error("Unable to start Growora island", error);
-      setLoading(false);
-      toast.error("The island could not start. Please reload the game.");
-    }
+    let frame = 0;
+    const startIsland = () => {
+      if (dead) return;
+      // Wait for React to attach the world container before starting Phaser.
+      if (!host.current) {
+        frame = window.requestAnimationFrame(startIsland);
+        return;
+      }
+      try {
+        ctrl.current?.destroy();
+        ctrl.current = createGame(host.current, { onSelect: (sel) => setPanel(toPanel(sel)) });
+        setLoading(false);
+      } catch (error) {
+        console.error("Unable to start Growora island", error);
+        setLoading(false);
+        toast.error("The island could not start. Please reload the game.");
+      }
+    };
+    setLoading(true);
+    frame = window.requestAnimationFrame(startIsland);
     return () => {
       dead = true;
+      window.cancelAnimationFrame(frame);
       ctrl.current?.destroy();
       ctrl.current = null;
     };
