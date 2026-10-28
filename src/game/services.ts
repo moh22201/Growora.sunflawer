@@ -310,7 +310,7 @@ class MockGameService
   }
   async register(name: string, email: string, password: string, avatar = 0): Promise<Result> {
     if (!name.trim() || !email.includes("@") || password.length < 6) return fail("err.register");
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    const redirectTo = "https://moh22201.github.io/Growora.sunflawer/";
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -324,7 +324,7 @@ class MockGameService
   }
   async recover(email: string): Promise<Result> {
     if (!email.includes("@")) return fail("err.email");
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    const redirectTo = "https://moh22201.github.io/Growora.sunflawer/";
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     if (error) return { ...fail("err.email"), message: error.message };
     return { ...ok("ok.recover"), message: "If this email is registered, a password reset link will be sent." };
