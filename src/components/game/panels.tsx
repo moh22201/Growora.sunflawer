@@ -7,6 +7,7 @@ import { D, fishingStatus, fmtDuration, fmtMoney, fmtSalesMoney, fmtQty, itemKin
 import { accountService, farmService, fishingService, marketService, productionService, settingsService, walletService, type Result } from "@/game/services";
 import { useGame, type Tx } from "@/game/store";
 import { useT } from "@/game/i18n";
+import { soundEnabled, setSoundEnabled } from "@/game/sound";
 import { Bar, DemoNote, Field, PixelButton, Row, Sheet, Tabs } from "./ui";
 import { AVATAR_COUNT, Avatar, ItemIcon } from "./icons";
 
@@ -628,9 +629,14 @@ function LangSpeed() {
 function SettingsPanel({ close }: { close: () => void }) {
   const t = useT();
   const [confirm, setConfirm] = useState(false);
+  const [soundOn, setSoundOn] = useState(soundEnabled());
   return (
     <Sheet title={t("set.title")} onClose={close} icon={<Settings className="size-4" />}>
       <LangSpeed />
+      <div className="flex items-center justify-between border-t-2 border-dashed border-wood pt-3">
+        <span className="font-display text-[10px]">{t("set.sound")}</span>
+        <PixelButton size="sm" variant={soundOn ? "gold" : "ghost"} onClick={() => { const next = !soundOn; setSoundOn(next); setSoundEnabled(next); }}>{soundOn ? t("set.soundOn") : t("set.soundOff")}</PixelButton>
+      </div>
       <div className="space-y-2 border-t-2 border-dashed border-wood pt-3">
         {confirm ? (
           <div className="space-y-2">
