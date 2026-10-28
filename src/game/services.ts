@@ -346,7 +346,7 @@ class MockGameService
       kind: "withdraw", labelKey: "tx.withdrawPending", amount: a.neg().toString(),
       currency: "sales", status: "pending", demo: false,
     }));
-    return { ...ok("ok.withdrawPending", { amount: a.toString() }), message: `Withdrawal request received. ${a.toString()} USDT has been reserved from your Sales Balance. You will receive ${data.payout_amount} USDT after the manual transfer is sent (5% fee).` };
+    return { ...ok("ok.withdrawPending", { amount: a.toString() }), message: `Withdrawal request received. ${a.toString()} USDT has been reserved from your Sales Balance. You will receive ${data.payout_amount} USDT after the manual transfer is sent (10% fee).` };
   }
   async login(email: string, password: string): Promise<Result> {
     if (!email.includes("@") || password.length < 6) return fail("err.credentials");
