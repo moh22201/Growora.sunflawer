@@ -36,7 +36,7 @@ export interface MarketService {
   sell(itemId: string, qty: string): Result | Promise<Result>;
 }
 export interface WalletService {
-  transferSalesToPlay(amount: string): Result;
+  transferSalesToPlay(amount: string): Promise<Result>;
   createDepositIntent(amount: string): Promise<Result>;
   requestDeposit(amount: string, paymentReference: string, intentId: string): Promise<Result>;
   requestWithdrawal(address: string, amount: string): Promise<Result>;
@@ -251,6 +251,16 @@ class MockGameService
     );
     return ok("ok.upgrade");
   }
+  setActive(kind: "hive" | "coop", active: boolean): Result {
+    const current = getState()[kind];
+    if (current.active === active) return ok("ok.saved");
+    const now = Date.now();
+    const elapsed = Math.max(0, now - current.last) / MIN / 60;
+    const level = getConfig()[kind].levels[current.level];
+    const stored = active ? current.stored : D(current.stored).plus(D(level.perHour).mul(elapsed)).toString();
+    setState((s) => ({ ...s, [kind]: { ...s[kind], active, last: now, stored } }));
+    return ok("ok.saved");
+  }
   async sell(itemId: string, qty: string): Promise<Result> {
     let q: Decimal;
     try { q = D(qty).toDecimalPlaces(4, Decimal.ROUND_DOWN); } catch { return fail("err.qty"); }
@@ -276,21 +286,25 @@ class MockGameService
     }));
     return ok("ok.sell", { qty: q.toString(), item: itemId, total: String(data.total) });
   }
-  transferSalesToPlay(amount: string) {
+  async transferSalesToPlay(amount: string): Promise<Result> {
     let a: Decimal;
-    try {
-      a = D(amount);
-    } catch {
-      return fail("err.qty");
+    try { a = D(amount); } catch { return fail("err.qty"); }
+    if (a.lte(0) || !a.eq(a.toDecimalPlaces(4, Decimal.ROUND_DOWN))) return fail("err.qty");
+    const { data, error } = await supabase.rpc("growora_game_action", {
+      p_action: "transfer_sales_to_play",
+      p_payload: { amount: a.toString() },
+      p_request_id: crypto.randomUUID(),
+    });
+    if (error) {
+      if (error.message.includes("insufficient_sales_balance")) return fail("err.salesFunds");
+      return { ...fail("err.generic"), message: error.message };
     }
-    if (a.lte(0)) return fail("err.qty");
-    if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
-    setState((s) =>
-      addTx(
-        { ...s, salesBalance: D(s.salesBalance).minus(a).toString(), playBalance: D(s.playBalance).plus(a).toString() },
-        { kind: "transfer", labelKey: "tx.transfer", amount: a.toString(), currency: "play" },
-      ),
-    );
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
+    setState((s) => addTx({
+      ...s,
+      playBalance: String(data.playBalance),
+      salesBalance: String(data.salesBalance),
+    }, { kind: "transfer", labelKey: "tx.transfer", amount: a.toString(), currency: "play" }));
     return ok("ok.transfer");
   }
   async createDepositIntent(amount: string): Promise<Result> {
