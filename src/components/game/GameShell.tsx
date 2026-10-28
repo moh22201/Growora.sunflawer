@@ -69,7 +69,7 @@ export function GameShell() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        queueMicrotask(() => { if (!dead) void initialize(session); });
+        window.setTimeout(() => { if (!dead) void initialize(session); }, 0);
       }
     });
     return () => {
