@@ -507,6 +507,7 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
   const [wAmt, setWAmt] = useState("");
   const [depositAmt, setDepositAmt] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
+  const [depositIntentId, setDepositIntentId] = useState("");
   let fee = D(0);
   let receive = D(0);
   try {
@@ -569,12 +570,29 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
             <span className="break-all font-mono text-xs">{DEPOSIT_ADDRESS}</span>
           </Row>
           <p className="text-xs text-muted-foreground">{s.lang === "fr" ? "Le dépôt est vérifié automatiquement sur BNB Smart Chain et crédité après 12 confirmations réseau. Utilisez uniquement USDT BEP-20." : "Deposits are verified automatically on BNB Smart Chain and credited after 12 network confirmations. Use USDT BEP-20 only."}</p>
-          <Field label={t("wallet.amount")} value={depositAmt} inputMode="decimal" onChange={(e) => setDepositAmt(e.target.value)} placeholder="1.00" />
-          <Field label={t("wallet.txReference")} value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder={t("wallet.txReferenceHint")} />
+          <Field label={depositIntentId ? (s.lang === "fr" ? "Montant exact à envoyer" : "Exact amount to send") : t("wallet.amount")} value={depositAmt} readOnly={Boolean(depositIntentId)} inputMode="decimal" onChange={(e) => setDepositAmt(e.target.value)} placeholder="1.00" />
+          {depositIntentId && <Field label={t("wallet.txReference")} value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder={t("wallet.txReferenceHint")} />}
           <PixelButton className="w-full" onClick={() => {
-            act(walletService.requestDeposit(depositAmt || "0", paymentReference));
+            if (!depositIntentId) {
+              void walletService.createDepositIntent(depositAmt || "0").then((result) => {
+                act(result);
+                if (result.ok && result.vars) {
+                  setDepositAmt(String(result.vars.amount ?? ""));
+                  setDepositIntentId(String(result.vars.id ?? ""));
+                }
+              }).catch((error) => act(Promise.reject(error)));
+              return;
+            }
+            void walletService.requestDeposit(depositAmt || "0", paymentReference, depositIntentId).then((result) => {
+              act(result);
+              if (result.ok) {
+                setDepositAmt("");
+                setPaymentReference("");
+                setDepositIntentId("");
+              }
+            }).catch((error) => act(Promise.reject(error)));
           }}>
-            {t("wallet.submitDeposit")}
+            {depositIntentId ? (s.lang === "fr" ? "Vérifier et créditer" : "Verify & credit") : (s.lang === "fr" ? "Créer les instructions" : "Create deposit instructions")}
           </PixelButton>
         </>
       )}
