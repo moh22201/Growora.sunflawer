@@ -8,9 +8,10 @@ import Decimal from "decimal.js";
 import { getConfig } from "./config";
 import { D, cropById, fishingStatus, growMs, itemPrice, levelNeed, MIN, production } from "./logic";
 import { getState, setState, resetState, type GameState, type Lang, type Tx } from "./store";
+import { supabase } from "@/lib/supabase";
 
 export type Vars = Record<string, string | number>;
-export type Result = { ok: boolean; key: string; vars?: Vars; fx?: string };
+export type Result = { ok: boolean; key: string; vars?: Vars; fx?: string; message?: string };
 const ok = (key: string, vars?: Vars, fx?: string): Result => ({ ok: true, key, vars, fx });
 const fail = (key: string, vars?: Vars): Result => ({ ok: false, key, vars });
 
@@ -37,11 +38,11 @@ export interface WalletService {
   requestWithdrawal(address: string, amount: string): Result;
 }
 export interface AccountService {
-  login(email: string, password: string): Result;
-  register(name: string, email: string, password: string): Result;
-  recover(email: string): Result;
-  logout(): Result;
-  updateProfile(p: { name: string; avatar: number }): Result;
+  login(email: string, password: string): Promise<Result>;
+  register(name: string, email: string, password: string, avatar?: number): Promise<Result>;
+  recover(email: string): Promise<Result>;
+  logout(): Promise<Result>;
+  updateProfile(p: { name: string; avatar: number }): Promise<Result>;
 }
 export interface SettingsService {
   setLang(l: Lang): void;
@@ -301,26 +302,48 @@ class MockGameService
     );
     return ok("ok.withdrawDemo");
   }
-  login(email: string, password: string) {
-    if (!email.includes("@") || password.length < 4) return fail("err.credentials");
-    setState((s) => ({ ...s, profile: { ...s.profile, email, loggedIn: true } }));
+  async login(email: string, password: string): Promise<Result> {
+    if (!email.includes("@") || password.length < 6) return fail("err.credentials");
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) return { ...fail("err.credentials"), message: error.message };
     return ok("ok.login");
   }
-  register(name: string, email: string, password: string) {
+  async register(name: string, email: string, password: string, avatar = 0): Promise<Result> {
     if (!name.trim() || !email.includes("@") || password.length < 6) return fail("err.register");
-    setState((s) => ({ ...s, profile: { ...s.profile, name: name.trim(), email, loggedIn: true } }));
+    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: redirectTo, data: { name: name.trim(), avatar } },
+    });
+    if (error) return { ...fail("err.register"), message: error.message };
+    if (!data.session) {
+      return { ...ok("ok.register"), message: "Account request sent. Check your email to confirm the account, then log in." };
+    }
     return ok("ok.register");
   }
-  recover(email: string) {
+  async recover(email: string): Promise<Result> {
     if (!email.includes("@")) return fail("err.email");
-    return ok("ok.recover");
+    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (error) return { ...fail("err.email"), message: error.message };
+    return { ...ok("ok.recover"), message: "If this email is registered, a password reset link will be sent." };
   }
-  logout() {
+  async logout(): Promise<Result> {
+    const { error } = await supabase.auth.signOut();
+    if (error) return { ...fail("err.generic"), message: error.message };
     setState((s) => ({ ...s, profile: { ...s.profile, loggedIn: false } }));
     return ok("ok.logout");
   }
-  updateProfile(p: { name: string; avatar: number }) {
+  async updateProfile(p: { name: string; avatar: number }): Promise<Result> {
     if (!p.name.trim()) return fail("err.generic");
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) return { ...fail("err.credentials"), message: authError?.message ?? "Please log in again." };
+    const { error } = await supabase.from("player_profiles").update({
+      username: p.name.trim(),
+      avatar: p.avatar,
+    }).eq("id", auth.user.id);
+    if (error) return { ...fail("err.generic"), message: error.message };
     setState((s) => ({ ...s, profile: { ...s.profile, name: p.name.trim(), avatar: p.avatar } }));
     return ok("ok.saved");
   }
