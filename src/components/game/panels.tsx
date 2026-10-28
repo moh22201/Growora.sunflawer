@@ -291,8 +291,65 @@ function MarketPanel({ close, act }: { close: () => void; act: Act }) {
           { id: "seeds", label: t("market.seeds") },
         ]}
       />
-      {tab === "seeds" ? <SeedList act={act} /> : <SellList kind={tab} act={act} />}
+      {tab === "fish" ? <FishMarketList act={act} /> : tab === "seeds" ? <SeedList act={act} /> : <SellList kind={tab} act={act} />}
     </Sheet>
+  );
+}
+
+function FishMarketList({ act }: { act: Act }) {
+  const s = useGame();
+  const t = useT();
+  const fish = getConfig().fishing.fish;
+  const [qtys, setQtys] = useState<Record<string, string>>({});
+  const [confirm, setConfirm] = useState<{ id: string; qty: string } | null>(null);
+  const totalQty = fish.reduce((sum, f) => sum.plus(s.inventory[f.id] ?? 0), D(0));
+  const totalValue = fish.reduce((sum, f) => sum.plus(D(s.inventory[f.id] ?? 0).mul(f.price)), D(0));
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <Row className="flex-col items-start gap-1">
+          <span className="text-xs text-muted-foreground">{t("common.owned")} · {t("market.fish")}</span>
+          <strong className="text-lg">{fmtQty(totalQty)}</strong>
+        </Row>
+        <Row className="flex-col items-start gap-1">
+          <span className="text-xs text-muted-foreground">{t("common.price")} · {t("market.fish")}</span>
+          <strong className="text-lg">{fmtMoney(totalValue)}</strong>
+        </Row>
+      </div>
+      <p className="font-display text-[10px]">{t("market.fish")} · {fish.length}</p>
+      {confirm && <ConfirmSell {...confirm} onDone={() => setConfirm(null)} act={act} />}
+      {fish.map((f) => {
+        const have = D(s.inventory[f.id] ?? 0);
+        const q = qtys[f.id] ?? "";
+        return (
+          <Row key={f.id} className="flex-wrap">
+            <ItemIcon id={f.id} />
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="font-semibold">{t(`item.${f.id}`)}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("common.owned")}: {fmtQty(have)} · {fmtMoney(f.price)} / {t("common.unit") || "unit"}
+              </p>
+              <p className="text-xs text-muted-foreground">{Math.round(f.chance * 100)}% {t("fish.chance") || "catch chance"}</p>
+            </div>
+            <input
+              inputMode="decimal"
+              placeholder="0"
+              value={q}
+              onChange={(e) => setQtys({ ...qtys, [f.id]: e.target.value })}
+              className="pixel-inset w-16 bg-input px-1.5 py-1 text-card-foreground outline-none"
+              aria-label={t("common.qty")}
+            />
+            <PixelButton size="sm" disabled={have.lte(0)} onClick={() => setConfirm({ id: f.id, qty: q || "0" })}>
+              {t("common.sell")}
+            </PixelButton>
+            <PixelButton size="sm" variant="wood" disabled={have.lte(0)} onClick={() => setConfirm({ id: f.id, qty: have.toString() })}>
+              {t("common.sellAll")}
+            </PixelButton>
+          </Row>
+        );
+      })}
+    </div>
   );
 }
 
