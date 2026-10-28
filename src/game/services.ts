@@ -374,7 +374,8 @@ export const productionService: ProductionService = {
   setActive: (k, active) => {
     const now = Date.now();
     setState((st) => ({ ...st, [k]: { ...st[k], active, last: now } }));
-    return ok(active ? "ok.productionStarted" : "ok.productionPaused");
+    const fr = getState().lang === "fr";
+    return { ...ok(active ? "ok.productionStarted" : "ok.productionPaused"), message: active ? (fr ? "Production démarrée." : "Production started.") : (fr ? "Production mise en pause." : "Production paused.") };
   },
 };
 export const marketService: MarketService = mock;
