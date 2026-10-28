@@ -44,6 +44,9 @@ export async function loadPlayerState(user: User) {
 
 export async function savePlayerState(userId: string, state: GameState) {
   const saveData: Partial<GameState> = { ...state };
+  // Wallet balances are authoritative in the database; never send client copies back.
+  delete saveData.playBalance;
+  delete saveData.salesBalance;
   delete saveData.profile;
   delete saveData.speed;
   const { error } = await supabase.from("game_saves").upsert(
