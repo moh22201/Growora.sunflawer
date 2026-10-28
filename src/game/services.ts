@@ -9,6 +9,7 @@ import { getConfig } from "./config";
 import { D, cropById, fishingStatus, growMs, itemPrice, levelNeed, MIN, production } from "./logic";
 import { getState, setState, resetState, type GameState, type Lang, type Tx } from "./store";
 import { supabase } from "@/lib/supabase";
+import { setWalletRevision } from "./cloud";
 
 export type Vars = Record<string, string | number>;
 export type Result = { ok: boolean; key: string; vars?: Vars; fx?: string; message?: string };
@@ -98,6 +99,7 @@ class MockGameService
       p_request_id: crypto.randomUUID(),
     });
     if (error) return { ...fail("err.generic"), message: error.message };
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
     setState((s) => addTx({
       ...s,
       playBalance: String(data.playBalance),
@@ -263,6 +265,7 @@ class MockGameService
       if (error.message.includes("insufficient_inventory")) return fail("err.inventory");
       return { ...fail("err.generic"), message: error.message };
     }
+    if (data.walletRevision !== undefined) setWalletRevision(Number(data.walletRevision));
     setState((s) => addTx({
       ...s,
       salesBalance: String(data.salesBalance),
