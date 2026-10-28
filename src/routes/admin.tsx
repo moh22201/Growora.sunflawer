@@ -157,7 +157,7 @@ function AdminPage() {
             </section>
 
             <section className="hud-chip space-y-3 p-4">
-              <h2 className="font-display text-sm text-primary">Deposit requests</h2>
+              <h2 className="font-display text-sm text-primary">Automatically verified deposits</h2>
               {deposits.length === 0 ? <p className="text-sm opacity-70">No deposit requests yet.</p> : (
                 <div className="space-y-2">
                   {deposits.map((item) => (
@@ -171,8 +171,7 @@ function AdminPage() {
                       {item.payment_reference && <p className="break-all">Reference: {item.payment_reference}</p>}
                       {item.status === "pending" && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <button className="hud-chip px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_confirm_deposit", item.id)}>Confirm & credit</button>
-                          <button className="hud-chip px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_reject_deposit", item.id)}>Reject</button>
+                          <span className="text-xs opacity-70">Legacy pending request — not credited until a valid on-chain transaction is verified.</span>
                         </div>
                       )}
                     </article>
@@ -195,7 +194,7 @@ function AdminPage() {
                       <p>Fee: ${money(Number(item.fee_amount))} · {item.network} · {date(item.requested_at)}</p>
                       <p className="break-all">Destination: {item.destination}</p>
                       {item.status === "pending" && (
-                        <button className="hud-chip mt-3 px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_approve_withdrawal", item.id)}>Approve & reserve amount</button>
+                        <button className="hud-chip mt-3 px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_approve_withdrawal", item.id)}>Approve withdrawal for payout</button>
                       )}
                       {item.status === "approved" && (
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -228,7 +227,7 @@ function AdminPage() {
                 </div>
               )}
             </section>
-            <p className="text-xs opacity-70">Deposits are credited only after manual verification. Approving a withdrawal reserves the requested amount; the 5% fee is retained and the net payout must be sent manually on BEP-20 before you mark it paid with its transaction hash.</p>
+            <p className="text-xs opacity-70">Deposits are verified and credited automatically after 12 BNB Smart Chain confirmations. Withdrawal amounts are reserved immediately when requested; send the net amount manually on BEP-20, then record the payout transaction hash to mark it paid.</p>
           </>
         )}
       </div>
