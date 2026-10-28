@@ -150,12 +150,19 @@ class MockGameService
   cast() {
     const s = getState();
     if (s.fishing && fishingStatus(s, Date.now()) !== "expired") return fail("err.alreadyFishing");
-    const rod = getConfig().fishing.rods[s.rodLevel];
+    const cfg = getConfig().fishing;
+    const cost = D(cfg.castCost);
+    const e = pay(cost);
+    if (e) return e;
+    const rod = cfg.rods[s.rodLevel];
     const now = Date.now();
-    const wait = (rod.castMinutes * MIN) / Math.max(1, s.speed) * 60 / 60;
-    const expire = (getConfig().fishing.expireMinutes * MIN) / Math.max(1, s.speed);
-    setState((st) => ({ ...st, fishing: { castAt: now, readyAt: now + wait, expiresAt: now + wait + expire } }));
-    return ok("ok.cast", undefined, "〰");
+    const wait = (rod.castMinutes * MIN) / Math.max(1, s.speed);
+    const expire = (cfg.expireMinutes * MIN) / Math.max(1, s.speed);
+    setState((st) => addTx(
+      { ...st, playBalance: D(st.playBalance).minus(cost).toString(), fishing: { castAt: now, readyAt: now + wait, expiresAt: now + wait + expire } },
+      { kind: "upgrade", labelKey: "tx.fishingCast", vars: { cost: cost.toString() }, amount: cost.neg().toString(), currency: "play" },
+    ));
+    return ok("ok.cast", { cost: cost.toString() }, "〰");
   }
   collect() {
     return guarded("fish", () => {
