@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import Decimal from "decimal.js";
 import { Backpack, Egg, Fish, Hexagon, Settings, Sprout, Store, User, Wallet } from "lucide-react";
-import { getConfig } from "@/game/config";
+import { DEPOSIT_ADDRESS, getConfig } from "@/game/config";
 import { D, fishingStatus, fmtDuration, fmtMoney, fmtSalesMoney, fmtQty, itemKind, itemPrice, levelNeed, plotInfo, production, MIN } from "@/game/logic";
 import { accountService, farmService, fishingService, marketService, productionService, settingsService, walletService, type Result } from "@/game/services";
 import { useGame, type Tx } from "@/game/store";
@@ -511,6 +511,8 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
   const [amt, setAmt] = useState("");
   const [addr, setAddr] = useState("");
   const [wAmt, setWAmt] = useState("");
+  const [depositAmt, setDepositAmt] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
   let fee = D(0);
   let receive = D(0);
   try {
@@ -522,7 +524,6 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
   }
   return (
     <Sheet title={t("wallet.title")} onClose={close} icon={<Wallet className="size-4" />}>
-      <DemoNote>{t("common.demoNote")}</DemoNote>
       <Tabs
         value={tab}
         onChange={setTab}
@@ -571,17 +572,23 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
           </Row>
           <Row className="flex-col items-start">
             <span className="text-xs text-muted-foreground">{t("wallet.depositAddr")}</span>
-            <span className="font-mono">{t("wallet.notConfigured")}</span>
+            <span className="break-all font-mono text-xs">{DEPOSIT_ADDRESS}</span>
           </Row>
           <DemoNote>{t("wallet.depositNote")}</DemoNote>
-          <PixelButton disabled className="w-full">
-            {t("wallet.depositSoon")}
+          <Field label={t("wallet.amount")} value={depositAmt} inputMode="decimal" onChange={(e) => setDepositAmt(e.target.value)} placeholder="1.00" />
+          <Field label={t("wallet.txReference")} value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder={t("wallet.txReferenceHint")} />
+          <PixelButton className="w-full" onClick={() => {
+            act(walletService.requestDeposit(depositAmt || "0", paymentReference));
+            setDepositAmt("");
+            setPaymentReference("");
+          }}>
+            {t("wallet.submitDeposit")}
           </PixelButton>
         </>
       )}
       {tab === "withdraw" && (
         <>
-          <Field label={t("wallet.address")} value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="T…" />
+          <Field label={t("wallet.address")} value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x…" />
           <Field label={t("wallet.amount")} value={wAmt} inputMode="decimal" onChange={(e) => setWAmt(e.target.value)} placeholder="0.00" />
           <div className="pixel-inset space-y-0.5 bg-muted/60 p-2 text-sm">
             <p className="flex justify-between"><span>{t("wallet.network")}</span><span>{w.network}</span></p>
@@ -596,7 +603,7 @@ function WalletPanel({ close, act }: { close: () => void; act: Act }) {
           </PixelButton>
         </>
       )}
-      {tab === "history" && <TxList txs={[...s.txs, ...SAMPLE_TXS]} />}
+      {tab === "history" && <TxList txs={s.txs} />}
     </Sheet>
   );
 }
