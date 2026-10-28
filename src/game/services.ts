@@ -5,7 +5,7 @@
  * value server-side — client state must never be trusted for money.
  */
 import Decimal from "decimal.js";
-import { getConfig } from "./config";
+import { DEPOSIT_ADDRESS, getConfig } from "./config";
 import { D, cropById, fishingStatus, growMs, itemPrice, levelNeed, MIN, production } from "./logic";
 import { getState, setState, resetState, type GameState, type Lang, type Tx } from "./store";
 import { supabase } from "@/lib/supabase";
@@ -36,7 +36,8 @@ export interface MarketService {
 }
 export interface WalletService {
   transferSalesToPlay(amount: string): Result;
-  requestWithdrawal(address: string, amount: string): Result;
+  requestDeposit(amount: string, paymentReference: string): Promise<Result>;
+  requestWithdrawal(address: string, amount: string): Promise<Result>;
 }
 export interface AccountService {
   login(email: string, password: string): Promise<Result>;
@@ -286,22 +287,53 @@ class MockGameService
     );
     return ok("ok.transfer");
   }
-  requestWithdrawal(address: string, amount: string) {
-    const w = getConfig().wallet;
-    if (address.trim().length < 8) return fail("err.address");
+  async requestDeposit(amount: string, paymentReference: string): Promise<Result> {
     let a: Decimal;
-    try {
-      a = D(amount);
-    } catch {
-      return fail("err.qty");
-    }
+    try { a = D(amount); } catch { return fail("err.qty"); }
+    if (a.lt(1)) return fail("err.minDeposit", { min: "1" });
+    const reference = paymentReference.trim();
+    if (reference.length < 8) return fail("err.txReference");
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) return { ...fail("err.credentials"), message: "Log in to submit a deposit request." };
+    const { data, error } = await supabase.from("deposit_requests").insert({
+      user_id: auth.user.id,
+      amount: a.toString(),
+      currency: "USDT",
+      payment_method: "manual",
+      payment_reference: reference,
+      status: "pending",
+    }).select("id,amount,status,submitted_at").single();
+    if (error) return { ...fail("err.generic"), message: error.message };
+    setState((s) => addTx(s, {
+      kind: "deposit", labelKey: "tx.depositPending", amount: a.toString(),
+      currency: "play", status: "pending", demo: false,
+    }));
+    return { ...ok("ok.depositPending", { amount: a.toString() }), message: "Request submitted. Play balance is credited only after admin verification." };
+  }
+  async requestWithdrawal(address: string, amount: string): Promise<Result> {
+    const w = getConfig().wallet;
+    const destination = address.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(destination)) return fail("err.address");
+    let a: Decimal;
+    try { a = D(amount); } catch { return fail("err.qty"); }
     if (a.lt(w.minWithdrawal)) return fail("err.minWithdraw", { min: w.minWithdrawal });
     if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
-    // Demo only: nothing is deducted, nothing is sent.
-    setState((s) =>
-      addTx(s, { kind: "withdraw", labelKey: "tx.withdrawDemo", amount: a.neg().toString(), currency: "sales", status: "pending", demo: true }),
-    );
-    return ok("ok.withdrawDemo");
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) return { ...fail("err.credentials"), message: "Log in to request a withdrawal." };
+    const { data, error } = await supabase.from("withdrawal_requests").insert({
+      user_id: auth.user.id,
+      amount: a.toString(),
+      currency: "USDT",
+      network: "BNB Smart Chain (BEP-20)",
+      destination,
+      status: "pending",
+    }).select("id,amount,fee_amount,payout_amount,status,requested_at").single();
+    if (error) return { ...fail("err.generic"), message: error.message };
+    setState((s) => addTx(s, {
+      kind: "withdraw", labelKey: "tx.withdrawPending", amount: a.neg().toString(),
+      currency: "sales", status: "pending", demo: false,
+    }));
+    return { ...ok("ok.withdrawPending", { amount: a.toString() }), message: "Withdrawal request submitted. The requested amount is reserved only when an admin approves it; payout is manual." };
   }
   async login(email: string, password: string): Promise<Result> {
     if (!email.includes("@") || password.length < 6) return fail("err.credentials");
