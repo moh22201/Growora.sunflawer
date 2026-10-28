@@ -101,7 +101,7 @@ export const DEFAULT_CONFIG: GameConfig = {
       { cost: "45", perHour: "4", capacity: "40" },
     ],
   },
-  wallet: { network: "USDT · BNB Smart Chain (BEP-20)", minWithdrawal: "10", feePercent: "5", networkFee: "0" },
+  wallet: { network: "USDT · BNB Smart Chain (BEP-20)", minWithdrawal: "10", feePercent: "10", networkFee: "0" },
   ticker: { enabled: true, maxItems: 10 },
 };
 
