@@ -430,6 +430,7 @@ export const fishingService: FishingService = mock;
 export const productionService: ProductionService = {
   collect: (k) => mock.collectProd(k),
   upgrade: (k) => mock.upgradeProd(k),
+  setActive: (k, active) => mock.setActive(k, active),
 };
 export const marketService: MarketService = mock;
 export const walletService: WalletService = mock;
