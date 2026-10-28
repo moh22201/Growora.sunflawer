@@ -291,49 +291,43 @@ class MockGameService
     let a: Decimal;
     try { a = D(amount); } catch { return fail("err.qty"); }
     if (a.lt(1)) return fail("err.minDeposit", { min: "1" });
-    const reference = paymentReference.trim();
-    if (reference.length < 8) return fail("err.txReference");
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) return { ...fail("err.credentials"), message: "Log in to submit a deposit request." };
-    const { error } = await supabase.from("deposit_requests").insert({
-      user_id: auth.user.id,
-      amount: a.toString(),
-      currency: "USDT",
-      payment_method: "manual",
-      payment_reference: reference,
-      status: "pending",
+    const txHash = paymentReference.trim();
+    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) return { ...fail("err.txReference"), message: "Paste the full transaction hash from your BEP-20 USDT transfer." };
+    const { data, error } = await supabase.functions.invoke("verify-deposit", {
+      body: { amount: a.toString(), txHash },
     });
-    if (error) return { ...fail("err.generic"), message: error.message };
-    setState((s) => addTx(s, {
-      kind: "deposit", labelKey: "tx.depositPending", amount: a.toString(),
-      currency: "play", status: "pending", demo: false,
+    if (error || data?.error) return { ...fail("err.generic"), message: data?.error || error?.message || "Could not verify the transfer." };
+    setState((s) => addTx({
+      ...s,
+      playBalance: String(data.playBalance),
+    }, {
+      kind: "deposit", labelKey: "tx.deposit", amount: String(data.amount),
+      currency: "play", status: "confirmed", demo: false,
     }));
-    return { ...ok("ok.depositPending", { amount: a.toString() }), message: "Request submitted. Play balance is credited only after admin verification." };
+    return { ...ok("ok.deposit", { amount: String(data.amount) }), message: `Deposit verified. ${data.amount} USDT has been added to your Play Balance.` };
   }
   async requestWithdrawal(address: string, amount: string): Promise<Result> {
-    const w = getConfig().wallet;
     const destination = address.trim();
-    if (!/^0x[a-fA-F0-9]{40}$/.test(destination)) return fail("err.address");
     let a: Decimal;
     try { a = D(amount); } catch { return fail("err.qty"); }
-    if (a.lt(w.minWithdrawal)) return fail("err.minWithdraw", { min: w.minWithdrawal });
+    if (a.lt(10)) return fail("err.minWithdraw", { min: "10" });
     if (D(getState().salesBalance).lt(a)) return fail("err.salesFunds");
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) return { ...fail("err.credentials"), message: "Log in to request a withdrawal." };
-    const { error } = await supabase.from("withdrawal_requests").insert({
-      user_id: auth.user.id,
-      amount: a.toString(),
-      currency: "USDT",
-      network: "BNB Smart Chain (BEP-20)",
-      destination,
-      status: "pending",
+    const { data, error } = await supabase.rpc("request_withdrawal", {
+      p_amount: a.toString(),
+      p_destination: destination,
     });
-    if (error) return { ...fail("err.generic"), message: error.message };
-    setState((s) => addTx(s, {
+    if (error) {
+      const message = error.message || "Unable to submit withdrawal.";
+      if (message.includes("invalid_destination")) return fail("err.address");
+      if (message.includes("minimum_withdrawal_10")) return fail("err.minWithdraw", { min: "10" });
+      if (message.includes("insufficient_sales_balance")) return fail("err.salesFunds");
+      return { ...fail("err.generic"), message };
+    }
+    setState((s) => addTx({ ...s, salesBalance: String(data.sales_balance) }, {
       kind: "withdraw", labelKey: "tx.withdrawPending", amount: a.neg().toString(),
       currency: "sales", status: "pending", demo: false,
     }));
-    return { ...ok("ok.withdrawPending", { amount: a.toString() }), message: "Withdrawal request submitted. The requested amount is reserved only when an admin approves it; payout is manual." };
+    return { ...ok("ok.withdrawPending", { amount: a.toString() }), message: `Withdrawal request received. ${a.toString()} USDT has been reserved from your Sales Balance. You will receive ${data.payout_amount} USDT after the manual transfer is sent (5% fee).` };
   }
   async login(email: string, password: string): Promise<Result> {
     if (!email.includes("@") || password.length < 6) return fail("err.credentials");
