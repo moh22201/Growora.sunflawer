@@ -28,6 +28,7 @@ type Withdrawal = {
   destination: string;
   status: string;
   requested_at: string;
+  payout_reference?: string | null;
 };
 type Transaction = {
   id: string;
@@ -54,6 +55,8 @@ function AdminPage() {
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [busyRequest, setBusyRequest] = useState("");
+  const [payoutRefs, setPayoutRefs] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -106,6 +109,23 @@ function AdminPage() {
     void refresh();
   }, [refresh]);
 
+  const runAction = async (action: string, requestId: string, reference?: string) => {
+    setError("");
+    setBusyRequest(requestId);
+    try {
+      const args = action === "admin_mark_withdrawal_paid"
+        ? { p_request_id: requestId, p_payout_reference: reference?.trim() ?? "" }
+        : { p_request_id: requestId, p_admin_note: null };
+      const { error: actionError } = await supabase.rpc(action, args);
+      if (actionError) throw actionError;
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The admin action failed.");
+    } finally {
+      setBusyRequest("");
+    }
+  };
+
   const pendingDeposits = deposits.filter((item) => item.status === "pending").length;
   const pendingWithdrawals = withdrawals.filter((item) => item.status === "pending").length;
 
@@ -149,6 +169,12 @@ function AdminPage() {
                       <p className="break-all opacity-70">Player: {item.user_id}</p>
                       <p>Method: {item.payment_method} · {date(item.submitted_at)}</p>
                       {item.payment_reference && <p className="break-all">Reference: {item.payment_reference}</p>}
+                      {item.status === "pending" && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button className="hud-chip px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_confirm_deposit", item.id)}>Confirm & credit</button>
+                          <button className="hud-chip px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_reject_deposit", item.id)}>Reject</button>
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -168,6 +194,15 @@ function AdminPage() {
                       <p className="break-all opacity-70">Player: {item.user_id}</p>
                       <p>Fee: ${money(Number(item.fee_amount))} · {item.network} · {date(item.requested_at)}</p>
                       <p className="break-all">Destination: {item.destination}</p>
+                      {item.status === "pending" && (
+                        <button className="hud-chip mt-3 px-3 py-2 text-xs" disabled={busyRequest === item.id} onClick={() => void runAction("admin_approve_withdrawal", item.id)}>Approve & reserve amount</button>
+                      )}
+                      {item.status === "approved" && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <input className="min-w-0 flex-1 rounded border border-wood/50 bg-background px-3 py-2 text-xs" placeholder="Payout transaction hash" value={payoutRefs[item.id] ?? ""} onChange={(event) => setPayoutRefs((old) => ({ ...old, [item.id]: event.target.value }))} />
+                          <button className="hud-chip px-3 py-2 text-xs" disabled={busyRequest === item.id || (payoutRefs[item.id] ?? "").trim().length < 8} onClick={() => void runAction("admin_mark_withdrawal_paid", item.id, payoutRefs[item.id])}>Mark paid</button>
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -193,7 +228,7 @@ function AdminPage() {
                 </div>
               )}
             </section>
-            <p className="text-xs opacity-70">Payment requests are review-only for now. Confirming deposits, crediting balances and marking payouts paid will be enabled only through secure server-side operations.</p>
+            <p className="text-xs opacity-70">Deposits are credited only after manual verification. Approving a withdrawal reserves the requested amount; the 5% fee is retained and the net payout must be sent manually on BEP-20 before you mark it paid with its transaction hash.</p>
           </>
         )}
       </div>
