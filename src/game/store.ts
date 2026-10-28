@@ -97,7 +97,17 @@ export function hydrate() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const savedState = JSON.parse(raw) as Partial<GameState>;
-      state = { ...fresh, ...savedState, playBalance: "0", speed: 1 };
+      state = {
+        ...fresh,
+        ...savedState,
+        playBalance: "0",
+        speed: 1,
+        plots: (savedState.plots ?? fresh.plots).map((plot) => {
+          if (!plot.cropId) return plot;
+          const hours = getConfig().crops.find((crop) => crop.id === plot.cropId)?.growHours ?? 1;
+          return { ...plot, readyAt: plot.plantedAt + hours * 3_600_000 };
+        }),
+      };
     } else {
       state = fresh;
     }
