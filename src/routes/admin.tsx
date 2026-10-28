@@ -171,7 +171,7 @@ function AdminPage() {
                       {item.payment_reference && <p className="break-all">Reference: {item.payment_reference}</p>}
                       {item.status === "pending" && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="text-xs opacity-70">Legacy pending request — not credited until a valid on-chain transaction is verified.</span>
+                          <span className="text-xs opacity-70">{item.payment_method === "auto_intent" ? "Waiting for player transaction hash; the system verifies and credits automatically." : "Legacy pending request — not credited until a valid on-chain transaction is verified."}</span>
                         </div>
                       )}
                     </article>
