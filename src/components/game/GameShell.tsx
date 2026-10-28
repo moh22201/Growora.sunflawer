@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Backpack, Egg, Fish, Hexagon, Settings, Sprout, Store, Wallet } from "lucide-react";
 import type { Area, GameController, Selectable } from "@/game/scene";
-import { hydrate, useGame } from "@/game/store";
+import { hydrate, setState, useGame } from "@/game/store";
+import { supabase } from "@/lib/supabase";
+import { loadPlayerState, savePlayerState } from "@/game/cloud";
+import { AuthScreen } from "./AuthScreen";
 import { useT } from "@/game/i18n";
 import { fmtMoney, levelNeed } from "@/game/logic";
 import { settingsService, type Result } from "@/game/services";
@@ -26,11 +29,57 @@ export function GameShell() {
   const t = useT();
   const [panel, setPanel] = useState<Panel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataReady, setDataReady] = useState(false);
+  const currentUserId = useRef<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const ctrl = useRef<GameController | null>(null);
 
   useEffect(() => {
     hydrate();
+    let dead = false;
+    const initialize = async (session: import("@supabase/supabase-js").Session | null) => {
+      if (!session) {
+        currentUserId.current = null;
+        setDataReady(false);
+        setState((st) => ({ ...st, profile: { ...st.profile, loggedIn: false, email: "", name: "Farmer" } }));
+        setAuthLoading(false);
+        return;
+      }
+      setAuthLoading(true);
+      try {
+        await loadPlayerState(session.user);
+        currentUserId.current = session.user.id;
+        if (!dead) setDataReady(true);
+      } catch (error) {
+        console.error("Unable to load Growora player data", error);
+        toast.error(error instanceof Error ? error.message : "Could not load your saved farm.");
+        currentUserId.current = null;
+        setDataReady(false);
+        setState((st) => ({ ...st, profile: { ...st.profile, loggedIn: false } }));
+        await supabase.auth.signOut();
+      } finally {
+        if (!dead) setAuthLoading(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) toast.error(error.message);
+      void initialize(data.session);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        queueMicrotask(() => { if (!dead) void initialize(session); });
+      }
+    });
+    return () => {
+      dead = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!s.profile.loggedIn || !dataReady) return;
     let dead = false;
     import("@/game/scene").then(({ createGame }) => {
       if (dead || !host.current) return;
@@ -42,17 +91,31 @@ export function GameShell() {
       ctrl.current?.destroy();
       ctrl.current = null;
     };
-  }, []);
+  }, [s.profile.loggedIn, dataReady]);
+
+  useEffect(() => {
+    const userId = currentUserId.current;
+    if (!dataReady || !s.profile.loggedIn || !userId) return;
+    const timer = window.setTimeout(() => {
+      void savePlayerState(userId, s).catch((error) => {
+        console.error("Unable to save Growora progress", error);
+        toast.error("Your latest progress could not be saved. Please check your connection.");
+      });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [s, dataReady]);
 
   useEffect(() => {
     document.documentElement.lang = s.lang;
   }, [s.lang]);
 
   const act: Act = (r: Result, target) => {
-    const msg = t(r.key, r.vars);
-    if (r.ok) { toast.success(msg); playGameSound(r.key, r.vars); }
+    void Promise.resolve(r).then((result) => {
+    const msg = result.message || t(result.key, result.vars);
+    if (result.ok) { toast.success(msg); playGameSound(result.key, result.vars); }
     else toast.error(msg);
-    if (r.ok && r.fx && target !== undefined) ctrl.current?.float(target, r.fx);
+    if (result.ok && result.fx && target !== undefined) ctrl.current?.float(target, result.fx);
+    }).catch((error) => toast.error(error instanceof Error ? error.message : "Action failed."));
   };
 
   const go = (a: Area, p: Panel | null) => {
@@ -69,6 +132,11 @@ export function GameShell() {
     { label: t("nav.inventory"), icon: <Backpack />, on: () => setPanel({ kind: "inventory" }), active: panel?.kind === "inventory" },
     { label: t("nav.wallet"), icon: <Wallet />, on: () => setPanel({ kind: "wallet" }), active: panel?.kind === "wallet" },
   ];
+
+  if (authLoading) {
+    return <div className="fixed inset-0 flex flex-col items-center justify-center gap-3 bg-[#102d2a] text-emerald-100"><span className="font-display text-2xl">GROWORA</span><span className="text-sm text-white/60">{s.lang === "fr" ? "Chargement du compte…" : "Loading player account…"}</span></div>;
+  }
+  if (!s.profile.loggedIn || !dataReady) return <AuthScreen />;
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-ocean">
@@ -93,7 +161,7 @@ export function GameShell() {
         <div className="flex-1" />
         <button onClick={() => setPanel({ kind: "wallet" })} className="hud-chip pointer-events-auto flex flex-col items-end px-2 py-1 leading-tight">
           <span className="text-[10px] opacity-80">
-            {t("hud.play")} <span className="rounded bg-primary px-1 font-display text-[6px] text-primary-foreground">{t("app.demo")}</span>
+            {t("hud.play")}
           </span>
           <span className="font-display text-[10px] text-primary">{fmtMoney(s.playBalance)}</span>
           <span className="mt-0.5 text-[10px] opacity-80">{t("hud.sales")}</span>
