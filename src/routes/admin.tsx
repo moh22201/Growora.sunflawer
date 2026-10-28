@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { getConfig } from "@/game/config";
 
 export const Route = createFileRoute("/admin")({
@@ -13,7 +13,7 @@ function AdminPage() {
       <div className="mx-auto max-w-3xl space-y-5">
         <header className="flex items-center justify-between gap-3">
           <h1 className="font-display text-xl text-primary">GROWORA · ADMIN</h1>
-          <Link to="/" className="hud-chip px-3 py-2 text-sm underline">Back to game</Link>
+          <a href={import.meta.env.BASE_URL} className="hud-chip px-3 py-2 text-sm underline">Back to game</a>
         </header>
         <p className="text-sm opacity-80">Admin configuration preview. Values are currently read-only and stored in the game configuration.</p>
         <section className="grid gap-3 sm:grid-cols-2">
