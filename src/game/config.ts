@@ -117,10 +117,13 @@ export function loadConfig() {
       current = {
         ...DEFAULT_CONFIG,
         ...saved,
-        fishing: { ...DEFAULT_CONFIG.fishing, ...saved.fishing },
-        wallet: { ...DEFAULT_CONFIG.wallet, ...saved.wallet },
-        hive: { ...DEFAULT_CONFIG.hive, ...saved.hive },
-        coop: { ...DEFAULT_CONFIG.coop, ...saved.coop },
+        startingPlayBalance: DEFAULT_CONFIG.startingPlayBalance,
+        crops: DEFAULT_CONFIG.crops,
+        plots: DEFAULT_CONFIG.plots,
+        fishing: DEFAULT_CONFIG.fishing,
+        wallet: DEFAULT_CONFIG.wallet,
+        hive: DEFAULT_CONFIG.hive,
+        coop: DEFAULT_CONFIG.coop,
         ticker: { ...DEFAULT_CONFIG.ticker, ...saved.ticker },
       };
     } else {
