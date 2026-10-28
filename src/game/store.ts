@@ -92,33 +92,17 @@ export function setState(fn: (s: GameState) => GameState) {
 export function hydrate() {
   if (hydrated) return;
   loadConfig();
-  const fresh = makeDefault(Date.now());
+  state = makeDefault(Date.now());
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const savedState = JSON.parse(raw) as Partial<GameState>;
-      state = {
-        ...fresh,
-        ...savedState,
-        playBalance: "0",
-        speed: 1,
-        plots: (savedState.plots ?? fresh.plots).map((plot) => {
-          if (!plot.cropId) return plot;
-          const hours = getConfig().crops.find((crop) => crop.id === plot.cropId)?.growHours ?? 1;
-          return { ...plot, readyAt: plot.plantedAt + hours * 3_600_000 };
-        }),
-      };
-    } else {
-      state = fresh;
-    }
     const saved = localStorage.getItem("growora-lang");
-    if (!raw && (saved === "en" || saved === "fr")) state.lang = saved;
+    if (saved === "en" || saved === "fr") state.lang = saved;
   } catch {
-    state = fresh;
+    /* ignore */
   }
   hydrated = true;
   listeners.forEach((l) => l());
 }
+
 export function resetState() {
   const lang = state.lang;
   state = { ...makeDefault(Date.now()), lang };
