@@ -31,6 +31,7 @@ export function GameShell() {
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [dataReady, setDataReady] = useState(false);
+  const [sceneVersion, setSceneVersion] = useState(0);
   const currentUserId = useRef<string | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const ctrl = useRef<GameController | null>(null);
@@ -91,6 +92,17 @@ export function GameShell() {
       ctrl.current?.destroy();
       ctrl.current = null;
     };
+  }, [s.profile.loggedIn, dataReady, sceneVersion]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && s.profile.loggedIn && dataReady) {
+        setLoading(true);
+        setSceneVersion((version) => version + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [s.profile.loggedIn, dataReady]);
 
   useEffect(() => {
