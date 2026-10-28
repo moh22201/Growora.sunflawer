@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Decimal from "decimal.js";
 import { Backpack, Egg, Fish, Hexagon, Settings, Sprout, Store, User, Wallet } from "lucide-react";
 import { getConfig } from "@/game/config";
-import { D, fishingStatus, fmtDuration, fmtMoney, fmtQty, itemKind, itemPrice, levelNeed, plotInfo, production, MIN } from "@/game/logic";
+import { D, fishingStatus, fmtDuration, fmtMoney, fmtSalesMoney, fmtQty, itemKind, itemPrice, levelNeed, plotInfo, production, MIN } from "@/game/logic";
 import { accountService, farmService, fishingService, marketService, productionService, settingsService, walletService, type Result } from "@/game/services";
 import { useGame, type Tx } from "@/game/store";
 import { useT } from "@/game/i18n";
