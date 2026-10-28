@@ -256,9 +256,6 @@ function ProdPanel({ kind, close, act }: { kind: "hive" | "coop"; close: () => v
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <PixelButton variant={s[kind].active ? "blue" : "green"} onClick={() => act(productionService.setActive(kind, !s[kind].active), kind)}>
-          {s[kind].active ? (s.lang === "fr" ? "Arrêter la production" : "Pause production") : (s.lang === "fr" ? "Démarrer la production" : "Start production")}
-        </PixelButton>
         <PixelButton variant="green" disabled={p.amount.lt(1)} onClick={() => act(productionService.collect(kind), kind)}>
           {t("common.collect")}
         </PixelButton>
