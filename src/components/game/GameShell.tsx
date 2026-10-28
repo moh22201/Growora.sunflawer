@@ -109,7 +109,7 @@ export function GameShell() {
     document.documentElement.lang = s.lang;
   }, [s.lang]);
 
-  const act: Act = (r: Result, target) => {
+  const act: Act = (r: Result | Promise<Result>, target) => {
     void Promise.resolve(r).then((result) => {
     const msg = result.message || t(result.key, result.vars);
     if (result.ok) { toast.success(msg); playGameSound(result.key, result.vars); }
