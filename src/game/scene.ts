@@ -84,6 +84,9 @@ function makeTextures(sc: Phaser.Scene) {
   pix(sc, "lock", ["..KKK..", ".K...K.", ".K...K.", "GGGGGGG", "GGGKGGG", "GGGKGGG", "GGGGGGG"], { K: 0x5a5f66, G: 0xf2c94c }, 4);
   pix(sc, "spark", ["..W..", ".WYW.", "WYYYW", ".WYW.", "..W.."], { W: 0xffffff, Y: 0xffe14a }, 3);
   pix(sc, "bobber", [".RR.", "RRRR", "WWWW", ".WW."], { R: 0xe8384a, W: 0xffffff }, 3);
+  pix(sc, "fishA", ["..SS....", ".SSSSS..", "SSSSSSS.", ".SSSSS..", "..SS...."], { S: 0xf2c94c }, 3);
+  pix(sc, "fishB", ["..BB....", ".BBBBB..", "BBBBBBB.", ".BBBBB..", "..BB...."], { B: 0xffa45c }, 3);
+  pix(sc, "fisher", ["...HH...", "..HHHH..", "...SS...", "..SSSS..", ".SSSSSS.", "...PP...", "...PP...", "..P..P.."], { H: 0x5a3424, S: 0xf2c94c, P: 0x345d9d }, 4);
   pix(sc, "alert", [".YY.", ".YY.", ".YY.", "....", ".YY."], { Y: 0xffe14a }, 4);
   pix(sc, "lily", [".GG.G", "GGGGG", "GGLGG", ".GGG."], { G: 0x3d9a4a, L: 0x6fcf5a }, 4);
   pix(sc, "tuft", ["G.G.G", ".GGG."], { G: 0x4a9e48 }, 3);
@@ -164,7 +167,7 @@ class FarmScene extends Phaser.Scene {
   line!: Phaser.GameObjects.Graphics;
   alert!: Phaser.GameObjects.Image;
   honeyBar!: Phaser.GameObjects.Graphics;
-  eggs: Phaser.GameObjects.Image[] = [];
+  eggs: Phaser.GameObjects.Image[] = [];\n  swimmingFish: { s: Phaser.GameObjects.Image; x: number; y: number; range: number; speed: number; phase: number }[] = [];\n  fisherman!: Phaser.GameObjects.Image;
   dirty = true;
   unsub: () => void = () => {};
 
