@@ -110,7 +110,7 @@ class MockGameService
       setState((st) => ({
         ...st,
         seeds: { ...st.seeds, [cropId]: st.seeds[cropId] - 1 },
-        plots: st.plots.map((p, i) => (i === plot ? { cropId, plantedAt: now, readyAt: now + growMs(c.growHours, st.speed) } : p)),
+        plots: st.plots.map((p, i) => (i === plot ? { cropId, plantedAt: now, readyAt: now + growMs(c.growHours, 1) } : p)),
       }));
       return ok("ok.plant", { item: cropId }, "🌱");
     });
@@ -156,8 +156,8 @@ class MockGameService
     if (e) return e;
     const rod = cfg.rods[s.rodLevel];
     const now = Date.now();
-    const wait = (rod.castMinutes * MIN) / Math.max(1, s.speed);
-    const expire = (cfg.expireMinutes * MIN) / Math.max(1, s.speed);
+    const wait = rod.castMinutes * MIN;
+    const expire = cfg.expireMinutes * MIN;
     setState((st) => addTx(
       { ...st, playBalance: D(st.playBalance).minus(cost).toString(), fishing: { castAt: now, readyAt: now + wait, expiresAt: now + wait + expire } },
       { kind: "upgrade", labelKey: "tx.fishingCast", vars: { cost: cost.toString() }, amount: cost.neg().toString(), currency: "play" },
@@ -332,8 +332,9 @@ class MockGameService
     }
     setState((s) => ({ ...s, lang: l }));
   }
-  setSpeed(n: number) {
-    setState((s) => ({ ...s, speed: n }));
+  setSpeed(_n: number) {
+    // Player-controlled time acceleration is disabled; production runs at normal speed.
+    setState((s) => ({ ...s, speed: 1 }));
   }
   resetDemo() {
     resetState();
