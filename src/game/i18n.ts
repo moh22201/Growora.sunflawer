@@ -55,6 +55,8 @@ const en = {
   "fish.idle": "Cast your line into the pond.",
   "fish.castTime": "Cast time",
   "fish.chance": "Chance",
+  "fish.rareBonus": "bonus de prise rare",
+  "fish.rareBonus": "rare catch bonus",
   "fish.reel": "Reel in",
   "hive.title": "Beehive",
   "coop.title": "Chicken Coop",
