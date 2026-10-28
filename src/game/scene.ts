@@ -18,6 +18,7 @@ export interface GameController {
   destroy(): void;
   focus(a: Area): void;
   float(a: Area | number, text: string): void;
+  zoom(factor: number): void;
 }
 
 const W = 1200;
@@ -478,6 +479,11 @@ class FarmScene extends Phaser.Scene {
     if (this.bobber.visible) this.bobber.y = 650 + Math.sin(time / (this.alert.visible ? 90 : 400)) * (this.alert.visible ? 4 : 2);
   }
 
+  zoom(factor: number) {
+    const cam = this.cameras.main;
+    cam.setZoom(Phaser.Math.Clamp(cam.zoom * factor, 0.3, 2.2));
+  }
+
   focus(a: Area) {
     const p = AREAS[a];
     this.cameras.main.pan(p.x, p.y, 500, "Sine.easeInOut");
@@ -510,5 +516,6 @@ export function createGame(parent: HTMLElement, bridge: Bridge): GameController 
     destroy: () => game.destroy(true),
     focus: (a) => ready() && scene.focus(a),
     float: (a, t) => ready() && scene.float(a, t),
+    zoom: (factor) => ready() && scene.zoom(factor),
   };
 }
