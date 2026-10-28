@@ -6,7 +6,7 @@
  */
 import Decimal from "decimal.js";
 import { getConfig } from "./config";
-import { D, cropById, fishingStatus, growMs, itemPrice, levelNeed, MIN, production } from "./logic";
+import { D, cropById, fishingStatus, itemPrice, levelNeed, production } from "./logic";
 import { getState, setState, resetState, type GameState, type Lang, type Tx } from "./store";
 import { supabase } from "@/lib/supabase";
 import { setWalletRevision } from "./cloud";
@@ -59,18 +59,6 @@ let txSeq = 0;
 function addTx(s: GameState, t: Omit<Tx, "id" | "at" | "status"> & { status?: Tx["status"] }): GameState {
   const tx: Tx = { status: "confirmed", ...t, id: `${Date.now()}-${++txSeq}`, at: Date.now() };
   return { ...s, txs: [tx, ...s.txs].slice(0, 200) };
-}
-function addXp(s: GameState, n: number): GameState {
-  let xp = s.xp + n;
-  let level = s.level;
-  while (xp >= levelNeed(level)) {
-    xp -= levelNeed(level);
-    level++;
-  }
-  return { ...s, xp, level };
-}
-function addInv(s: GameState, id: string, q: Decimal.Value): GameState {
-  return { ...s, inventory: { ...s.inventory, [id]: D(s.inventory[id] ?? 0).plus(q).toString() } };
 }
 const locks = new Set<string>();
 function guarded(key: string, fn: () => Result): Result {
