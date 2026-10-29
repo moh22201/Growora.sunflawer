@@ -1,9 +1,9 @@
-// Keep the Lovable TanStack Start defaults; they configure Nitro for Netlify.
+// Use the repository subpath only for GitHub Pages builds; standalone hosts use root.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
   vite: {
-    base: process.env.NETLIFY ? "/" : "/Growora.sunflawer/",
+    base: process.env.GITHUB_ACTIONS ? "/Growora.sunflawer/" : "/",
   },
   tanstackStart: {
     spa: {
